@@ -442,6 +442,24 @@ expect_ok render --out "$RENDER_FILE" --json
 [[ -s "$RENDER_FILE" ]] || fail_step "expected a non-empty rendered HTML file at $RENDER_FILE" "render --out $RENDER_FILE"
 expect_ok guide --json
 
+# A publish with no --out must leave nothing behind: the snapshot goes through
+# a temp file that is removed once the (stubbed) artifact store owns the bytes.
+section "Render --publish leaves no file in the cwd"
+STUB_BIN="$TMP_DIR/stub-bin"
+PUBLISH_CWD="$TMP_DIR/publish-cwd"
+mkdir -p "$STUB_BIN" "$PUBLISH_CWD"
+printf '#!/bin/sh\necho "stub-published $2"\n' > "$STUB_BIN/agentwiki"
+chmod +x "$STUB_BIN/agentwiki"
+echo "+ agentboard render --publish --json  (cwd: publish-cwd, stub agentwiki)"
+PUBLISH_OUT="$(cd "$PUBLISH_CWD" && PATH="$STUB_BIN:$PATH" bun "$MAIN" render --publish --json)"
+printf '%s\n' "$PUBLISH_OUT"
+printf '%s' "$PUBLISH_OUT" | grep -q '"path":null' ||
+    fail_step "expected a null path once the published temp file is removed" "render --publish"
+CHECKS=$((CHECKS + 1))
+[[ -z "$(ls -A "$PUBLISH_CWD")" ]] ||
+    fail_step "expected render --publish to leave no file in the cwd" "render --publish"
+CHECKS=$((CHECKS + 1))
+
 # --- Ambiguous and unknown refs ---
 
 section "Ambiguous and unknown refs"

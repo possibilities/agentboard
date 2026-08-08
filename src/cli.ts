@@ -5,8 +5,9 @@
  * itself and stdout stays a single, parseable channel.
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
-import { resolve as resolvePath } from "node:path";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve as resolvePath } from "node:path";
 import { buildBrief, speakBrief } from "./brief.ts";
 import { openBoard, resolveDatabasePath } from "./db.ts";
 import { CliError, UsageError } from "./errors.ts";
@@ -741,13 +742,28 @@ const COMMAND_TABLE: Record<string, Command> = {
         tree: containsForest(items, ctx.board.liveEdges()),
         generatedAt: ctx.board.stamp(),
       });
-      const target = resolvePath(optionalValue(ctx.flags, "out") ?? "agentboard.html");
+      const out = optionalValue(ctx.flags, "out");
+      const publishing = ctx.flags.bools.has("publish");
+      // A publish with no --out must not litter the cwd: the snapshot goes to
+      // a temp file and, once the CAS owns the bytes, the file is removed. On
+      // a failed publish it stays, because the recovery command names it.
+      const target = resolvePath(
+        out ??
+          (publishing
+            ? join(tmpdir(), `agentboard-render-${process.pid}.html`)
+            : "agentboard.html"),
+      );
       writeFileSync(target, html);
       let published: string | null = null;
-      if (ctx.flags.bools.has("publish")) published = publish(target);
+      if (publishing) published = publish(target);
+      const kept = out !== undefined || published === null;
+      if (!kept) unlinkSync(target);
       return {
-        data: { path: target, bytes: html.length, published },
-        human: published === null ? `wrote ${target}` : `wrote ${target}\npublished: ${published}`,
+        data: { path: kept ? target : null, bytes: html.length, published },
+        human:
+          published === null
+            ? `wrote ${target}`
+            : `${kept ? `wrote ${target}\n` : ""}published: ${published}`,
       };
     },
   },

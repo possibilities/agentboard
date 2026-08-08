@@ -400,7 +400,10 @@ Usage:
 
 Writes one self-contained HTML file: kanban columns by state, plus the
 containment tree. --publish hands it to \`agentwiki publish\` when agentwiki is on
-PATH. agentboard never runs an HTTP server.
+PATH; without --out the published snapshot is written to a temp file and removed
+once the artifact store owns the bytes, so nothing is left in the cwd (a failed
+publish keeps the file the recovery command names). agentboard never runs an
+HTTP server.
 `,
   guide: `agentboard guide — the machine card
 
