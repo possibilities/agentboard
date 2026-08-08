@@ -19,7 +19,40 @@ function emit(body: string): void {
   if (body.length > 0) console.log(body);
 }
 
-function main(argv: string[]): number {
+/** Global flags a caller may put before the command name as well as after. */
+const HOISTABLE = { value: new Set(["--db"]), bool: new Set(["--json", "--jsonl"]) };
+
+/**
+ * Lift leading global flags off the front of argv so `agentboard --db X list`
+ * and `agentboard list --db X` are the same command. They are re-appended after
+ * the command's own arguments; naming one twice is a duplicate-flag usage
+ * fault, which is the honest answer rather than a silent winner.
+ */
+function hoistGlobals(argv: string[]): { globals: string[]; rest: string[] } {
+  const globals: string[] = [];
+  let index = 0;
+  while (index < argv.length) {
+    const argument = argv[index]!;
+    const equals = argument.indexOf("=");
+    const flag = equals === -1 ? argument : argument.slice(0, equals);
+    if (HOISTABLE.bool.has(flag) && equals === -1) {
+      globals.push(argument);
+      index++;
+      continue;
+    }
+    if (HOISTABLE.value.has(flag)) {
+      globals.push(argument);
+      index++;
+      if (equals === -1 && index < argv.length) globals.push(argv[index++]!);
+      continue;
+    }
+    break;
+  }
+  return { globals, rest: argv.slice(index) };
+}
+
+function main(raw: string[]): number {
+  const { globals, rest: argv } = hoistGlobals(raw);
   const command = argv[0];
   if (command === undefined || command === "--help" || command === "-h") {
     emit(TOP_HELP);
@@ -38,7 +71,7 @@ function main(argv: string[]): number {
     return 0;
   }
 
-  const rest = argv.slice(1);
+  const rest = [...argv.slice(1), ...globals];
   // Asking for a command's help must never open the board or fail on a missing
   // required flag: it is the thing a caller reaches for when the flags are wrong.
   if (rest.includes("--help") || rest.includes("-h")) {

@@ -83,6 +83,34 @@ describe("the CLI contract", () => {
     }
   });
 
+  test("a global flag reads the same before and after the command name", () => {
+    const directory = mkdtempSync(join(tmpdir(), "agentboard-globals-"));
+    try {
+      const db = join(directory, "board.sqlite3");
+      const bare = (args: string[]): Run => {
+        const result = Bun.spawnSync(["bun", MAIN, ...args], {
+          env: { ...process.env, AGENTBOARD_DB: "/nonexistent/never.sqlite3" },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        return {
+          code: result.exitCode ?? -1,
+          stdout: new TextDecoder().decode(result.stdout),
+          stderr: new TextDecoder().decode(result.stderr),
+        };
+      };
+      // --db outranks the environment, in either position and either spelling.
+      expect(bare(["--db", db, "add", "a thing"]).code).toBe(0);
+      expect(envelope(bare(["--json", "--db", db, "list"])).data.count).toBe(1);
+      expect(envelope(bare(["list", "--db", db, "--json"])).data.count).toBe(1);
+      expect(envelope(bare([`--db=${db}`, "--json", "list"])).data.count).toBe(1);
+      // Naming one twice is a usage fault rather than a silent winner.
+      expect(bare(["--json", "--db", db, "list", "--json"]).code).toBe(2);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("import refuses a board that already holds a history", () => {
     const directory = mkdtempSync(join(tmpdir(), "agentboard-roundtrip-"));
     try {

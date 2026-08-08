@@ -47,7 +47,9 @@ const COMMAND_LINES = COMMANDS.map(
 export const TOP_HELP = `agentboard — agent-first planning board
 
 Usage:
-  agentboard [command] [options]
+  agentboard [global options] <command> [options]
+
+Global options may go before or after the command name.
 
 Global options:
   --db <path>      Board database (default: ~/.local/share/agentboard/board.sqlite3;
