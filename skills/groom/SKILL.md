@@ -1,6 +1,15 @@
 ---
 name: groom
-description: Reshape an agentboard board in bulk through one atomic grooming draft, using the agentboard CLI. Use for any change touching several items at once — "reorganize the board", "restructure the backlog", "merge these duplicates", "split this epic", "close everything about X", "re-plan the project", deduplicating or consolidating captured work. Several edits at once is one draft, never a loop of single commands: the draft declares the board revision it was built on and the items it may touch, then lands completely or writes nothing. Single-item edits and reading the board are the board skill.
+description: >-
+  Reshape an agentboard board in bulk through one atomic grooming draft,
+  using the agentboard CLI. Use for any change touching several items at
+  once — "reorganize the board", "restructure the backlog", "merge these
+  duplicates", "split this epic", "close everything about X", "re-plan the
+  project", deduplicating or consolidating captured work. Several edits at
+  once is one draft, never a loop of single commands: the draft declares
+  the board revision it was built on and the items it may touch, then lands
+  completely or writes nothing. Single-item edits and reading the board are
+  the board skill.
 ---
 
 # Groom — bulk reshaping through atomic drafts
