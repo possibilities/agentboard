@@ -49,9 +49,24 @@ function spec(value: string[] = [], bool: string[] = []): FlagSpec {
   };
 }
 
+/** What a command that never reads the board sees: the path, but no database
+ * behind it. */
+export type BoardlessContext = Omit<Context, "board">;
+
 interface Command {
   spec: FlagSpec;
+  /** The discriminant, so an entry in the table below still gets its `ctx`
+   * typed from which of the two shapes it is. */
+  boardless?: undefined;
   run(ctx: Context): CommandOutput;
+}
+
+interface BoardlessCommand {
+  spec: FlagSpec;
+  /** Marks a command that needs no database, so running it is not a reason
+   * for one to come into existence. */
+  boardless: true;
+  run(ctx: BoardlessContext): CommandOutput;
 }
 
 // --- Argument helpers ---
@@ -165,7 +180,7 @@ function writeOut(path: string | undefined, body: string, fallback: string): str
 
 // --- Commands ---
 
-const COMMAND_TABLE: Record<string, Command> = {
+const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   add: {
     spec: spec(["--title", "--summary", "--tag", "--origin"], ["--new"]),
     run(ctx) {
@@ -769,6 +784,7 @@ const COMMAND_TABLE: Record<string, Command> = {
 
   guide: {
     spec: spec(),
+    boardless: true,
     run(ctx) {
       const guide = buildGuide(ctx.dbPath);
       return { data: guide, human: JSON.stringify(guide, null, 2) };
@@ -823,6 +839,9 @@ export function runPrepared(
   const command = COMMAND_TABLE[prepared.name]!;
   const { flags } = prepared;
   const dbPath = resolveDatabasePath(flags.values["db"], env, home);
+  if (command.boardless === true) {
+    return { output: command.run({ dbPath, flags, env }), close: () => {} };
+  }
   const board = new Board(openBoard(dbPath));
   try {
     return { output: command.run({ board, dbPath, flags, env }), close: () => board.close() };
