@@ -111,6 +111,26 @@ describe("the CLI contract", () => {
     }
   });
 
+  test("edit reaches the item by phrase and needs at least one field", () => {
+    const directory = mkdtempSync(join(tmpdir(), "agentboard-edit-"));
+    try {
+      const db = join(directory, "board.sqlite3");
+      run(db, ["add", "the auth cleanup"]);
+      // "Rename that to X" is one call, no draft file.
+      const edited = envelope(run(db, ["edit", "auth", "--label", "the token rotation", "--json"]));
+      expect(edited.ok).toBe(true);
+      expect(edited.data.label).toBe("the token rotation");
+      expect(edited.data.topic_key).toBe("token-rotation");
+      // Naming no field at all is a usage fault, not an empty write.
+      const fault = run(db, ["edit", "token", "--json"]);
+      expect(fault.code).toBe(2);
+      expect(fault.stdout).toBe("");
+      expect(fault.stderr).toMatch(/at least one of --label, --title, or --summary/);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("import refuses a board that already holds a history", () => {
     const directory = mkdtempSync(join(tmpdir(), "agentboard-roundtrip-"));
     try {

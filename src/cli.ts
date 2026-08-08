@@ -186,6 +186,25 @@ const COMMAND_TABLE: Record<string, Command> = {
     },
   },
 
+  edit: {
+    spec: spec(["--label", "--title", "--summary"]),
+    run(ctx) {
+      const label = optionalValue(ctx.flags, "label");
+      const title = optionalValue(ctx.flags, "title");
+      const summary = optionalValue(ctx.flags, "summary");
+      if (label === undefined && title === undefined && summary === undefined) {
+        throw new UsageError("edit needs at least one of --label, --title, or --summary");
+      }
+      const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
+      const edited = ctx.board.updateItem(item, {
+        ...(label === undefined ? {} : { label }),
+        ...(title === undefined ? {} : { title }),
+        ...(summary === undefined ? {} : { summary }),
+      });
+      return { data: itemPayload(edited), human: format.itemLine(edited) };
+    },
+  },
+
   get: {
     spec: spec(),
     run(ctx) {

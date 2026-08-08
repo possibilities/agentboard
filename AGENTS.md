@@ -69,6 +69,11 @@ See `docs/adr/`. In short:
   appends to the item's event log and bumps its revision.
 - Ranks are dense over *every* row, tombstones and terminal items included, and
   are only ever rewritten as a whole permutation — never patched in place.
+- `order --to next` queues behind the **last** item that is underway (`active`),
+  not the first, so reprioritizing never displaces work a second agent holds.
+  See `docs/adr/0005-next-queues-behind-work-underway.md`.
+- Single-item edits are `edit`; anything that touches several items at once is a
+  grooming draft. Grooming is the only *bulk* path, not the only write path.
 - Comments state constraints the code can't show; no narration.
 - `Record<string, unknown>` access uses bracket keys (Biome `useLiteralKeys`
   is off).

@@ -29,10 +29,14 @@ agentboard ready                              # open work with no unfinished blo
 agentboard claim "the auth cleanup" --agent codex
 agentboard done "the auth cleanup" --note "rotated and deployed"
 
+agentboard edit "the auth cleanup" --label "the token rotation"
 agentboard order --id "the log panel,the icons" --to next
 agentboard brief                              # grouped summary
 agentboard brief --spoken                     # speakable prose, labels only
 ```
+
+`--to next` queues behind every item an agent is already working, not just the
+first, so reprioritizing what comes next never displaces work in progress.
 
 Capture refuses a label that names work already open, and says which item it
 already is:

@@ -9,6 +9,7 @@ export const VERSION = "0.1.0";
 
 export const COMMANDS = [
   { name: "add", summary: "Capture an item from spoken words" },
+  { name: "edit", summary: "Reword one item's label, title, or summary" },
   { name: "get", summary: "Show one item with its relations, refs, and blockers" },
   { name: "list", summary: "List the board in order, filtered by state or tag" },
   { name: "search", summary: "Find items whose label, title, summary, or tags match" },
@@ -111,12 +112,21 @@ Capturing and shaping
   agentboard add the auth cleanup --summary "..." --tag auth,security --json
     Refused with existing_topic when an open item already covers that topic —
     that is the point. Pass --new only when a second item is genuinely wanted.
+  agentboard edit <ref> --label "..."      Reword one item: --label, --title, or
+                                          --summary, at least one. A rename
+                                          recomputes the topic key and is refused
+                                          if it collides with another open item.
+                                          Single items only — several at once is
+                                          a grooming draft.
   agentboard relate <a> depends-on <b>    contains | depends-on | conflicts-with |
                                           supersedes | related-to. Acyclic kinds
                                           are validated on write.
   agentboard link <ref> --wiki some-slug --rel spec
   agentboard order --id "a,b,c" --to next  Dictated sequence is preserved exactly;
                                           one "then this, then this" is one call.
+                                          "next" queues behind every claimed
+                                          item, so it never displaces an agent's
+                                          work in progress.
   agentboard wait <ref> --reason "..."    "Blocked" is never a stored state — it
                                           is computed from depends-on edges.
   agentboard rm <ref> --reason "..."      A tombstone, not a delete; restore
@@ -160,6 +170,25 @@ existing_topic, naming the match — pass --new to capture a second one anyway.
 Examples:
   agentboard add the auth cleanup --tag auth,security
   agentboard add fix the flaky login test --summary "fails ~1 in 20 on CI" --json
+`,
+  edit: `agentboard edit — reword one item
+
+Usage:
+  agentboard edit <ref> [--label "..."] [--title "..."] [--summary "..."] [--json]
+
+At least one field is required. Editing the label recomputes the topic key, so a
+rename onto a topic another open item already holds is refused with
+existing_topic — supersede or relate the two instead. Terminal and removed items
+refuse the edit; the change appends to the event log and bumps the revision like
+any other mutation.
+
+This is the single-item path. Reshaping several items at once — creating,
+closing, and rewiring relations together — still goes through a grooming draft,
+which is the only bulk-mutation path.
+
+Examples:
+  agentboard edit "the auth cleanup" --label "the token rotation"
+  agentboard edit it-9f2a41bc --summary "fails ~1 in 20 on CI" --json
 `,
   get: `agentboard get — one item in full
 
@@ -269,8 +298,10 @@ Usage:
   agentboard order --id "<ref>,<ref>,..." --to first|next|last|after <ref> [--json]
 
 The listed items keep the sequence they were named in, so one dictated run of
-work is one call. "next" lands behind the item currently leading the board;
-"after" names an anchor. Order is priority and nothing else: it never claims
+work is one call. "next" lands behind *every* item already underway — that is,
+every claimed (active) item, not merely the first — so reprioritizing what comes
+next never displaces work an agent is holding; with nothing underway it is the
+same as "first". "after" names an anchor. Order is priority and nothing else: it never claims
 work, changes a state, or overrides a depends-on edge.
 
 Examples:

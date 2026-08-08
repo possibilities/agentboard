@@ -31,22 +31,65 @@ describe("placeItems", () => {
     expect(move(["d", "b"], { at: "first" })).toEqual(["d", "b", "a", "c"]);
   });
 
-  test("next lands behind the item currently leading the board", () => {
-    expect(move(["d"], { at: "next" })).toEqual(["a", "d", "b", "c"]);
+  test("next is the front when nothing is underway", () => {
+    expect(move(["d"], { at: "next" })).toEqual(["d", "a", "b", "c"]);
+    expect(move(["d"], { at: "next" })).toEqual(move(["d"], { at: "first" }));
   });
 
-  test("next is the front when the leader is itself being moved", () => {
-    expect(move(["a", "d"], { at: "next" })).toEqual(["b", "a", "d", "c"]);
+  test("next lands behind the one item being worked", () => {
+    const board = [row("running", "active"), row("a"), row("b")];
+    expect(move(["b"], { at: "next" }, board)).toEqual(["running", "b", "a"]);
   });
 
-  test("next skips finished and removed work when looking for the leader", () => {
+  // The case the whole shape exists for: taking the *first* busy item would put
+  // the moved run at index 1, ahead of the second agent's work.
+  test("two agents working: next stays behind both, not just the first", () => {
     const board = [
-      row("done", "done"),
-      row("gone", "open", "2026-01-01T00:00:00Z"),
+      row("alice-is-on-this", "active"),
+      row("idle-between"),
+      row("bob-is-on-this", "active"),
       row("a"),
       row("b"),
     ];
-    expect(move(["b"], { at: "next" }, board)).toEqual(["done", "gone", "a", "b"]);
+    expect(move(["b"], { at: "next" }, board)).toEqual([
+      "alice-is-on-this",
+      "idle-between",
+      "bob-is-on-this",
+      "b",
+      "a",
+    ]);
+  });
+
+  // Not a prefix length: the idle item sitting between two busy ones is carried
+  // along rather than displaced, because nobody asked to reorder it.
+  test("an idle item between two busy ones keeps its place", () => {
+    const board = [row("busy1", "active"), row("idle"), row("busy2", "active"), row("a")];
+    expect(move(["a"], { at: "next" }, board)).toEqual(["busy1", "idle", "busy2", "a"]);
+  });
+
+  test("moving every in-flight item collapses next to first", () => {
+    const board = [row("busy1", "active"), row("busy2", "active"), row("a"), row("b")];
+    expect(move(["busy1", "busy2"], { at: "next" }, board)).toEqual(["busy1", "busy2", "a", "b"]);
+    expect(move(["b", "busy1", "busy2"], { at: "next" }, board)).toEqual([
+      "b",
+      "busy1",
+      "busy2",
+      "a",
+    ]);
+  });
+
+  test("a moved in-flight item cannot pin itself to its own former place", () => {
+    const board = [row("a"), row("busy", "active"), row("b")];
+    expect(move(["busy"], { at: "next" }, board)).toEqual(["busy", "a", "b"]);
+  });
+
+  test("finished, waiting, paused, and removed work is not in flight", () => {
+    for (const state of ["done", "waiting", "paused"] as ItemState[]) {
+      const board = [row("not-underway", state), row("a")];
+      expect(move(["a"], { at: "next" }, board)).toEqual(["a", "not-underway"]);
+    }
+    const removed = [row("gone", "active", "2026-01-01T00:00:00Z"), row("a")];
+    expect(move(["a"], { at: "next" }, removed)).toEqual(["a", "gone"]);
   });
 
   test("after means after the anchor once the movers are lifted out", () => {

@@ -336,6 +336,56 @@ expect_ok order --id "$ITEM_WEBHOOK,$ITEM_REINDEX" --to next --json
 expect_ok order --id "$ITEM_ARCHIVE" --to last --json
 expect_ok order --id "$ITEM_DASH1" --to after "$ITEM_SEARCH" --json
 
+# "Next" must queue behind *every* claimed item, not just the first: with two
+# agents working, the moved run must not jump ahead of the second one. Run on a
+# separate board so the ordering is exact rather than dependent on what came
+# before it in this transcript.
+section "Order: next queues behind two agents' work"
+NEXT_DB="$TMP_DIR/next-semantics.sqlite3"
+expect_ok add alice work --db "$NEXT_DB" --json
+NEXT_ALICE="$(last_field data.id)"
+expect_ok add idle between --db "$NEXT_DB" --json
+expect_ok add bob work --db "$NEXT_DB" --json
+NEXT_BOB="$(last_field data.id)"
+expect_ok add later work --db "$NEXT_DB" --json
+NEXT_LATER="$(last_field data.id)"
+expect_ok claim "$NEXT_ALICE" --agent alice --db "$NEXT_DB" --json
+expect_ok claim "$NEXT_BOB" --agent bob --db "$NEXT_DB" --json
+expect_ok order --id "$NEXT_LATER" --to next --db "$NEXT_DB" --json
+expect_ok list --db "$NEXT_DB" --all --json
+NEXT_ORDER="$(printf '%s' "$LAST_OUT" | bun -e "
+  const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+  process.stdout.write(data.data.items.map((item) => item.label).join(' | '));
+")"
+assert_contains "$NEXT_ORDER" "alice work | idle between | bob work | later work" \
+  "the board order after --to next with two agents working"
+
+# Releasing bob's claim makes his item idle, so next now lands behind alice only.
+expect_ok release "$NEXT_BOB" --db "$NEXT_DB" --json
+expect_ok order --id "$NEXT_LATER" --to next --db "$NEXT_DB" --json
+expect_ok list --db "$NEXT_DB" --all --json
+NEXT_ORDER="$(printf '%s' "$LAST_OUT" | bun -e "
+  const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+  process.stdout.write(data.data.items.map((item) => item.label).join(' | '));
+")"
+assert_contains "$NEXT_ORDER" "alice work | later work | idle between | bob work" \
+  "the board order after --to next with only one agent working"
+
+# --- Edit ---
+
+section "Edit: label, title, summary, existing_topic"
+expect_ok edit "$ITEM_ARCHIVE" --summary "superseded by the new exporter" --json
+expect_ok edit "$ITEM_ARCHIVE" --title "Archive the legacy exporter" --json
+expect_ok edit "$ITEM_ARCHIVE" --label "retire the legacy export tool" --json
+assert_contains "$(last_field data.topic_key)" "retire-the-legacy-export-tool" \
+  "the topic key after a rename"
+# A rename onto a topic another open item already holds is the duplicate `add`
+# exists to refuse, so `edit` refuses it the same way.
+expect_fail 1 existing_topic edit "$ITEM_ARCHIVE" --label "ship the new onboarding flow" --json
+# Terminal items are frozen against edits too.
+expect_fail 1 terminal_item edit "$ITEM_RELEASE" --summary "too late" --json
+expect_usage_fault edit "$ITEM_ARCHIVE"
+
 # --- Relate and unrelate ---
 
 section "Relate and unrelate: relation_cycle"

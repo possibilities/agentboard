@@ -13,7 +13,8 @@ point a new capture at an existing open item instead of forking a duplicate.
 
 **Order** — the single dense priority rank across every item on the board. Order is priority and
 nothing else; it survives state changes, tombstoning, and restore. Placements are `first`, `next`
-(behind the item currently leading the board), `last`, and `after <ref>`. _Avoid_: position, index.
+(behind every item already underway, so running work is never displaced), `last`, and
+`after <ref>`. _Avoid_: position, index.
 
 **State** — what is true of the work: `open`, `active`, `waiting`, `paused`, and the frozen
 terminal `done`, `superseded`, `cancelled`. Waiting and paused carry the reason that is their

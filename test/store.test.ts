@@ -49,6 +49,68 @@ describe("capture", () => {
   });
 });
 
+describe("edit", () => {
+  test("a rename recomputes the topic key, so a recapture still finds the item", () => {
+    withBoard((board) => {
+      const item = board.addItem({ label: "the auth cleanup" });
+      const edited = board.updateItem(item, { label: "the token rotation" });
+      expect(edited.topicKey).toBe("token-rotation");
+      // The old topic is free again; the new one is now the one that is taken.
+      expect(() => board.addItem({ label: "the auth cleanup" })).not.toThrow();
+      expect(code(() => board.addItem({ label: "Token rotation" }))).toBe("existing_topic");
+    });
+  });
+
+  test("renaming onto a topic another open item holds is refused", () => {
+    withBoard((board) => {
+      board.addItem({ label: "the auth cleanup" });
+      const other = board.addItem({ label: "the log panel" });
+      expect(code(() => board.updateItem(other, { label: "Auth cleanup" }))).toBe("existing_topic");
+    });
+  });
+
+  test("renaming an item to its own topic is not a collision", () => {
+    withBoard((board) => {
+      const item = board.addItem({ label: "the auth cleanup" });
+      expect(() => board.updateItem(item, { label: "Auth cleanup" })).not.toThrow();
+    });
+  });
+
+  test("terminal and removed items refuse an edit", () => {
+    withBoard((board) => {
+      const done = board.addItem({ label: "finished" });
+      board.transition(done, "done");
+      expect(code(() => board.updateItem(board.item(done.id)!, { summary: "late" }))).toBe(
+        "terminal_item",
+      );
+      const gone = board.addItem({ label: "removed" });
+      board.remove(gone, "not now");
+      expect(code(() => board.updateItem(board.item(gone.id)!, { summary: "late" }))).toBe(
+        "removed_item",
+      );
+    });
+  });
+
+  test("an edit appends an event and advances the revision", () => {
+    withBoard((board) => {
+      const item = board.addItem({ label: "the thing" });
+      const edited = board.updateItem(item, { title: "The Thing", summary: "now with detail" });
+      expect(edited.revision).toBe(item.revision + 1);
+      const last = board.events(item.id).at(-1)!;
+      expect(last.kind).toBe("updated");
+      expect(last.detail).toContain("The Thing");
+      expect(last.revision).toBe(edited.revision);
+    });
+  });
+
+  test("an edit that changes nothing is refused", () => {
+    withBoard((board) => {
+      const item = board.addItem({ label: "the thing" });
+      expect(code(() => board.updateItem(item, {}))).toBe("nothing_to_update");
+    });
+  });
+});
+
 describe("claims", () => {
   test("a second agent is refused rather than queued", () => {
     withBoard((board) => {
@@ -112,6 +174,34 @@ describe("order", () => {
       const restored = board.restore(board.item(ids[1]!)!, "back on");
       expect(restored.rank).toBe(1);
       expect(restored.state).toBe("open");
+    });
+  });
+
+  // Through real claims rather than fixtures: "do this next" must not jump the
+  // moved work ahead of the second agent's item.
+  test("next queues behind every claimed item, with two agents working", () => {
+    withBoard((board) => {
+      const ids = ["alice work", "idle between", "bob work", "later work"].map(
+        (label) => board.addItem({ label }).id,
+      );
+      board.transition(board.item(ids[0]!)!, "claim", { agent: "alice" });
+      board.transition(board.item(ids[2]!)!, "claim", { agent: "bob" });
+      board.reorder([ids[3]!], { at: "next" });
+      expect(board.items().map((item) => item.label)).toEqual([
+        "alice work",
+        "idle between",
+        "bob work",
+        "later work",
+      ]);
+      // Releasing bob's claim makes his item idle, so next now lands behind alice.
+      board.transition(board.item(ids[2]!)!, "release");
+      board.reorder([ids[3]!], { at: "next" });
+      expect(board.items().map((item) => item.label)).toEqual([
+        "alice work",
+        "later work",
+        "idle between",
+        "bob work",
+      ]);
     });
   });
 

@@ -63,7 +63,7 @@ export function buildGuide(dbPath: string): unknown {
     },
     order_placements: PLACEMENTS,
     order_note:
-      "`order --id a,b,c` keeps the dictated sequence exactly, so one spoken run of work is one call. `next` lands behind the item currently leading the board.",
+      "`order --id a,b,c` keeps the dictated sequence exactly, so one spoken run of work is one call. `next` lands behind every item already underway (state active) — all of them, not just the first — so reprioritizing what comes next never displaces work an agent is holding. With nothing underway it is the same as first.",
     ref_resolution: {
       tiers: MATCH_TIERS,
       note: "Strongest tier first, stopping at the first that matches. Live items outrank tombstoned ones within a tier. More than one match in the chosen tier is refused with ambiguous_ref naming the candidates.",

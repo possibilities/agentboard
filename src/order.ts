@@ -9,7 +9,7 @@
  */
 
 import { CliError } from "./errors.ts";
-import { type ItemState, isTerminal } from "./types.ts";
+import type { ItemState } from "./types.ts";
 
 export const PLACEMENTS = ["first", "next", "last", "after"] as const;
 export type PlacementName = (typeof PLACEMENTS)[number];
@@ -26,6 +26,17 @@ export interface Rankable {
   label: string;
   state: ItemState;
   deletedAt: string | null;
+}
+
+/**
+ * Work that is genuinely underway, and therefore must not be displaced by
+ * reprioritizing what comes after it. `active` is exactly that state: claimed
+ * and being worked. A waiting or paused item keeps its claim but is not being
+ * worked, so it queues like any other idle item — pausing is about attention,
+ * not priority, and it must not silently pin the board.
+ */
+export function isInFlight(item: Rankable): boolean {
+  return item.deletedAt === null && item.state === "active";
 }
 
 export interface Sortable {
@@ -102,12 +113,23 @@ export function placeItems<T extends Rankable>(
       at = remaining.length;
       break;
     case "next": {
-      // "Next" is one behind whatever currently leads the board: reprioritizing
-      // what comes after the head must not displace the head itself.
-      const head = remaining.findIndex(
-        (item) => item.deletedAt === null && !isTerminal(item.state),
+      // "Next" queues behind *all* the work already underway, not merely the
+      // first of it: the insertion point is one past the last in-flight item.
+      // This is not a prefix length — in-flight items scattered through the
+      // board carry the idle items sitting between them along too, because the
+      // alternative is reordering work nobody asked to reorder. Taking the
+      // first busy item instead is the bug this shape exists to avoid: with two
+      // agents working, it jumps the moved run ahead of the second one.
+      //
+      // The scan runs over the sequence with the movers already lifted out,
+      // which is also what excludes a moved in-flight item structurally — it is
+      // not in `remaining`, so it cannot pin itself to its own former place.
+      // With nothing in flight, `next` and `first` coincide.
+      const last = remaining.reduce(
+        (found, item, position) => (isInFlight(item) ? position : found),
+        -1,
       );
-      at = head === -1 ? 0 : head + 1;
+      at = last + 1;
       break;
     }
     case "after": {
@@ -149,7 +171,7 @@ export function describePlacement(placement: Placement, labelOf: (id: string) =>
     case "last":
       return "moved to the back of the board";
     case "next":
-      return "moved to the front of the board, behind the item already leading it";
+      return "moved to the front of the board, behind the work already underway";
     case "after":
       return `moved after "${labelOf(placement.anchor)}"`;
   }

@@ -479,9 +479,23 @@ export class Board {
     if (input.label !== undefined) {
       const label = normalizeLabel(input.label);
       if (label.length === 0) throw new CliError("blank_label", "an item needs a speakable label");
+      const topicKey = topicKeyFor(label);
+      // Renaming onto a topic another open item already holds would produce the
+      // duplicate `add` exists to refuse, so it is refused the same way.
+      const clash = this.items().find(
+        (candidate) =>
+          candidate.id !== item.id && candidate.topicKey === topicKey && isOpenWork(candidate),
+      );
+      if (clash !== undefined) {
+        throw new CliError(
+          "existing_topic",
+          `"${clash.label}" (${clash.id}) is already on the board for that topic`,
+          "supersede or relate the two items instead of giving them the same name",
+        );
+      }
       this.db.run("UPDATE items SET label = ?, topic_key = ? WHERE id = ?", [
         label,
-        topicKeyFor(label),
+        topicKey,
         item.id,
       ]);
       changes.push(`label → "${label}"`);
