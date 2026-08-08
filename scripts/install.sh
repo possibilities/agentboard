@@ -8,7 +8,10 @@ BIN_DIR="${AGENTBOARD_INSTALL_BIN_DIR:-$HOME/.local/bin}"
 STATE_DIR="${AGENTBOARD_INSTALL_STATE_DIR:-$HOME/.local/state/agentboard}"
 TARGET="$BIN_DIR/agentboard"
 RECEIPT="$STATE_DIR/deployed-sha"
-EXPECTED_ORIGIN="https://github.com/possibilities/agentboard.git"
+UPSTREAM_ORIGIN="https://github.com/possibilities/agentboard.git"
+# A fork installs from its own checkout, so the origin this refuses to
+# install from has to be overridable; the upstream spelling is the default.
+EXPECTED_ORIGIN="${AGENTBOARD_INSTALL_EXPECTED_ORIGIN:-$UPSTREAM_ORIGIN}"
 TMP_PATH=""
 
 cleanup() {
@@ -155,10 +158,10 @@ normalized_origin() {
   origin="${origin%/}"
   case "$origin" in
     https://github.com/possibilities/agentboard|https://github.com/possibilities/agentboard.git)
-      printf '%s\n' "$EXPECTED_ORIGIN"
+      printf '%s\n' "$UPSTREAM_ORIGIN"
       ;;
     git@github.com:possibilities/agentboard|git@github.com:possibilities/agentboard.git|ssh://git@github.com/possibilities/agentboard|ssh://git@github.com/possibilities/agentboard.git)
-      printf '%s\n' "$EXPECTED_ORIGIN"
+      printf '%s\n' "$UPSTREAM_ORIGIN"
       ;;
     *)
       printf '%s\n' "$origin"
