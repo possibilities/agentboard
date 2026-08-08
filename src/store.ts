@@ -374,6 +374,22 @@ export class Board {
   }
 
   /** Advance an item's revision and record why. Every mutation ends here. */
+  /**
+   * Re-read an item inside the transaction that is about to change it.
+   *
+   * Callers resolve a reference before the write begins, so the record they
+   * hold is a snapshot from before the write lock was taken. Validating that
+   * snapshot is how two agents both pass a claim check and both write; every
+   * mutation therefore judges the row as it is now, not as it was read.
+   */
+  private fresh(item: Item): Item {
+    const current = this.item(item.id);
+    if (current === null) {
+      throw new CliError("unknown_ref", `"${item.label}" is no longer on the board`);
+    }
+    return current;
+  }
+
   private touch(id: string, kind: string, detail: string | null, at: string): number {
     const row = this.db.query("SELECT revision FROM items WHERE id = ?").get(id) as {
       revision: number;
@@ -455,7 +471,8 @@ export class Board {
     return this.write(() => this.updateItemIn(item, input));
   }
 
-  updateItemIn(item: Item, input: UpdateItemInput): Item {
+  updateItemIn(snapshot: Item, input: UpdateItemInput): Item {
+    const item = this.fresh(snapshot);
     assertMutable(item, "editing it");
     const changes: string[] = [];
     const at = this.stamp();
@@ -504,10 +521,11 @@ export class Board {
   }
 
   transitionIn(
-    item: Item,
+    snapshot: Item,
     transition: Transition,
     options: { reason?: string; note?: string; agent?: string } = {},
   ): Item {
+    const item = this.fresh(snapshot);
     if (transition === "claim") {
       const agent = options.agent?.trim();
       if (!agent) throw new CliError("agent_required", "a claim names the agent taking the work");
@@ -550,7 +568,7 @@ export class Board {
       if (item.id === successor.id) {
         throw new CliError("self_supersede", "an item cannot supersede itself");
       }
-      assertLive(successor, "superseding with it");
+      assertLive(this.fresh(successor), "superseding with it");
       const closed = this.transitionIn(item, "supersede", {
         reason: `superseded by "${successor.label}"`,
         ...(note === undefined ? {} : { note }),
@@ -586,12 +604,14 @@ export class Board {
   }
 
   addRelationIn(
-    from: Item,
-    to: Item,
+    fromSnapshot: Item,
+    toSnapshot: Item,
     kind: RelationKind,
     note: string | undefined,
     origin: Origin,
   ): Relation {
+    const from = this.fresh(fromSnapshot);
+    const to = this.fresh(toSnapshot);
     if (from.id === to.id) {
       throw new CliError("self_relation", "an item cannot be related to itself");
     }
@@ -634,7 +654,9 @@ export class Board {
     return this.write(() => this.removeRelationIn(from, to, kind));
   }
 
-  removeRelationIn(from: Item, to: Item, kind: RelationKind): Relation {
+  removeRelationIn(fromSnapshot: Item, toSnapshot: Item, kind: RelationKind): Relation {
+    const from = this.fresh(fromSnapshot);
+    const to = this.fresh(toSnapshot);
     const edge = canonicalEdge({ kind, from: from.id, to: to.id });
     const existing = this.relations().find(
       (relation) =>
@@ -654,8 +676,9 @@ export class Board {
     return existing;
   }
 
-  addRef(item: Item, target: string, rel: RefRel): Ref {
+  addRef(snapshot: Item, target: string, rel: RefRel): Ref {
     return this.write(() => {
+      const item = this.fresh(snapshot);
       assertLive(item, "linking it");
       const at = this.stamp();
       const existing = this.refs(item.id).find((ref) => ref.target === target);
@@ -674,8 +697,9 @@ export class Board {
     });
   }
 
-  removeRef(item: Item, target: string): Ref {
+  removeRef(snapshot: Item, target: string): Ref {
     return this.write(() => {
+      const item = this.fresh(snapshot);
       const existing = this.refs(item.id).find((ref) => ref.target === target);
       if (existing === undefined) {
         throw new CliError(
@@ -695,8 +719,9 @@ export class Board {
    * a restore brings the item back exactly as the human left it, in the place
    * they left it — removal never takes an item's priority away.
    */
-  remove(item: Item, reason: string): Item {
+  remove(snapshot: Item, reason: string): Item {
     return this.write(() => {
+      const item = this.fresh(snapshot);
       if (item.deletedAt !== null) {
         throw new CliError("already_removed", `"${item.label}" is already removed from the board`);
       }
@@ -713,8 +738,9 @@ export class Board {
     });
   }
 
-  restore(item: Item, reason: string | undefined): Item {
+  restore(snapshot: Item, reason: string | undefined): Item {
     return this.write(() => {
+      const item = this.fresh(snapshot);
       if (item.deletedAt === null) {
         throw new CliError("not_removed", `"${item.label}" is not removed`);
       }

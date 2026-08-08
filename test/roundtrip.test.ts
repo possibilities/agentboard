@@ -126,6 +126,36 @@ describe("the CLI contract", () => {
     }
   });
 
+  // The headline property: several agents reading `ready` at once and racing
+  // for the same item must produce exactly one holder, not two.
+  test("only one of several agents racing for the same item wins the claim", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "agentboard-race-"));
+    try {
+      const db = join(directory, "board.sqlite3");
+      run(db, ["add", "the contested item"]);
+      const racers = Array.from({ length: 8 }, (_, index) =>
+        Bun.spawn(
+          ["bun", MAIN, "claim", "the contested item", "--agent", `agent-${index}`, "--json"],
+          {
+            env: { ...process.env, AGENTBOARD_DB: db },
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        ),
+      );
+      const codes = await Promise.all(racers.map((racer) => racer.exited));
+      expect(codes.filter((code) => code === 0)).toHaveLength(1);
+      const item = envelope(run(db, ["get", "the contested item", "--json"])).data;
+      expect(item.state).toBe("active");
+      expect(item.claim.agent).toMatch(/^agent-\d$/);
+      // The losers were refused, not queued behind the winner.
+      const events = envelope(run(db, ["events", "the contested item", "--json"])).data.events;
+      expect(events.filter((event: { kind: string }) => event.kind === "claimed")).toHaveLength(1);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("a board written by a newer agentboard is refused loudly", () => {
     const directory = mkdtempSync(join(tmpdir(), "agentboard-roundtrip-"));
     try {
