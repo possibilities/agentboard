@@ -141,6 +141,7 @@ export function buildGuide(dbPath: string): unknown {
         "draft_conflict",
         "groom_refused",
         "board_not_empty",
+        "invalid_export_value",
         "unsupported_schema_version",
       ],
     },

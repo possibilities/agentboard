@@ -104,6 +104,19 @@ function oneOf<T extends string>(value: string, allowed: readonly T[], what: str
   return value as T;
 }
 
+/** An ejected line is a hand-editable file, so import is a trust boundary:
+ * the columns are STRICT but TEXT, and SQLite would happily seat a misspelled
+ * state that every later read then has to cope with. */
+function exportEnum<T extends string>(value: unknown, allowed: readonly T[], field: string): T {
+  if (typeof value === "string" && (allowed as readonly string[]).includes(value))
+    return value as T;
+  throw new CliError(
+    "invalid_export_value",
+    `${field} is ${JSON.stringify(value)}, which is not one of ${allowed.join(", ")}`,
+    `edit that line so ${field} is one of ${allowed.join(", ")}, then import again`,
+  );
+}
+
 function refTarget(flags: ParsedFlags): string {
   const wiki = optionalValue(flags, "wiki");
   const url = optionalValue(flags, "url");
@@ -700,9 +713,9 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
               topicKey: record["topic_key"],
               summary: record["summary"] ?? null,
               tags: record["tags"] ?? [],
-              state: record["state"],
+              state: exportEnum(record["state"], ITEM_STATES, "item state"),
               stateReason: record["state_reason"] ?? null,
-              origin: record["origin"],
+              origin: exportEnum(record["origin"], ORIGINS, "item origin"),
               rank: record["rank"],
               claim: record["claim"] ?? null,
               createdAt: record["created_at"],
@@ -716,9 +729,11 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
             payload.events.push(record);
             break;
           case "relation":
+            exportEnum(record["kind"], RELATION_KINDS, "relation kind");
             payload.relations.push(record);
             break;
           case "ref":
+            exportEnum(record["rel"], REF_RELS, "ref rel");
             payload.refs.push(record);
             break;
           case "grooming":
