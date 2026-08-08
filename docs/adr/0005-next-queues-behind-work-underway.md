@@ -9,10 +9,11 @@ attention, not priority.
 
 The insertion point is one past the **last** item underway, not the first. That
 distinction is the whole point: with two agents working, queueing behind the
-first one jumps the moved run ahead of the second agent's item — the bug
-`docs/PORTFOLIO-ORDER.md` in agentvoice records fixing. It is deliberately not a
-prefix length either, so an idle item sitting between two busy ones is carried
-along rather than displaced, because nobody asked to reorder it.
+first one jumps the moved run ahead of the second agent's item, so a
+reprioritization silently demoted work that agent already held. It is
+deliberately not a prefix length either, so an idle item sitting between two
+busy ones is carried along rather than displaced, because nobody asked to
+reorder it.
 
 The scan runs over the sequence with the movers already lifted out, which is
 what stops a moved in-flight item pinning itself to its own former place. With

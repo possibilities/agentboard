@@ -10,6 +10,8 @@ phrase from a label.
 
 ## Install
 
+Requires Bun ≥ 1.3.14.
+
 ```sh
 bash scripts/install.sh
 ```
@@ -20,32 +22,14 @@ symlink and leaves the board database alone.
 
 ## Use
 
-```sh
-agentboard add the auth cleanup --tag auth,security --summary "rotate the tokens"
-agentboard add the log panel
-agentboard relate "the log panel" depends-on "the auth cleanup"
-
-agentboard ready                              # open work with no unfinished blockers
-agentboard claim "the auth cleanup" --agent codex
-agentboard done "the auth cleanup" --note "rotated and deployed"
-
-agentboard edit "the auth cleanup" --label "the token rotation"
-agentboard order --id "the log panel,the icons" --to next
-agentboard brief                              # grouped summary
-agentboard brief --spoken                     # speakable prose, labels only
-```
+`agentboard --help` lists all 31 commands. The mechanics worth knowing before
+you read them:
 
 `--to next` queues behind every item an agent is already working, not just the
 first, so reprioritizing what comes next never displaces work in progress.
 
-Capture refuses a label that names work already open, and says which item it
-already is:
-
-```
-$ agentboard add Auth cleanup
-error: "the auth cleanup" (it-7ec81509) is already on the board for that topic
-  → add to it instead, or pass --new to capture a second item on the same topic
-```
+Capture refuses a label that names work already open and says which item it
+already is — that refusal is the feature, and `--new` overrides it.
 
 Reshaping in bulk goes through a grooming draft, which is atomic, idempotent,
 and refused if the board moved underneath it:
