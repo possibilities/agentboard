@@ -94,7 +94,7 @@ export function buildGuide(dbPath: string): unknown {
     integration: {
       render: "agentboard render --out <path> [--publish] writes one self-contained HTML file.",
       publish:
-        "--publish shells out to `agentwiki publish <file> --name agentboard --kind render` when agentwiki is on PATH.",
+        "--publish shells out to `agentwiki publish <file> --name agentboard --kind render --json` when agentwiki is on PATH, and returns that envelope's data unchanged as `published`.",
       server: "agentboard never runs an HTTP server.",
       eject:
         "agentboard export --jsonl and agentboard import <file> (into an empty database only).",

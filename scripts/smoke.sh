@@ -448,7 +448,13 @@ section "Render --publish leaves no file in the cwd"
 STUB_BIN="$TMP_DIR/stub-bin"
 PUBLISH_CWD="$TMP_DIR/publish-cwd"
 mkdir -p "$STUB_BIN" "$PUBLISH_CWD"
-printf '#!/bin/sh\necho "stub-published $2"\n' > "$STUB_BIN/agentwiki"
+# The stub stands in for agentwiki's envelope, which is the actual contract:
+# --publish asks for --json and keeps `data` verbatim, so the stub has to emit
+# a real schema-v1 envelope and not a line of prose.
+cat > "$STUB_BIN/agentwiki" <<'STUB'
+#!/bin/sh
+printf '%s\n' '{"schema_version":1,"ok":true,"error":null,"data":{"name":"agentboard","version":"0123456789abcdef","kind":"render","status":"created","url":"/a/agentboard/","version_url":"/a/agentboard/v/0123456789abcdef/","stub":"/tmp/wiki/artifacts/agentboard.md"}}'
+STUB
 chmod +x "$STUB_BIN/agentwiki"
 echo "+ agentboard render --publish --json  (cwd: publish-cwd, stub agentwiki)"
 PUBLISH_OUT="$(cd "$PUBLISH_CWD" && PATH="$STUB_BIN:$PATH" bun "$MAIN" render --publish --json)"
@@ -456,8 +462,32 @@ printf '%s\n' "$PUBLISH_OUT"
 printf '%s' "$PUBLISH_OUT" | grep -q '"path":null' ||
     fail_step "expected a null path once the published temp file is removed" "render --publish"
 CHECKS=$((CHECKS + 1))
+printf '%s' "$PUBLISH_OUT" | grep -q '"version":"0123456789abcdef"' ||
+    fail_step "expected agentwiki's envelope data to come through as published" "render --publish"
+CHECKS=$((CHECKS + 1))
 [[ -z "$(ls -A "$PUBLISH_CWD")" ]] ||
     fail_step "expected render --publish to leave no file in the cwd" "render --publish"
+CHECKS=$((CHECKS + 1))
+
+# A refusal on the far side has to arrive as a refusal here, not as success.
+section "Render --publish surfaces an agentwiki refusal"
+cat > "$STUB_BIN/agentwiki" <<'STUB'
+#!/bin/sh
+printf '%s\n' '{"schema_version":1,"ok":false,"error":{"code":"artifact_too_large","message":"too big","recovery":"publish fewer bytes"},"data":null}'
+exit 1
+STUB
+chmod +x "$STUB_BIN/agentwiki"
+echo "+ agentboard render --publish --json  (stub agentwiki refusing)"
+set +e
+PUBLISH_FAIL="$(cd "$PUBLISH_CWD" && PATH="$STUB_BIN:$PATH" bun "$MAIN" render --publish --json)"
+PUBLISH_FAIL_CODE=$?
+set -e
+printf '%s\n' "$PUBLISH_FAIL"
+[[ "$PUBLISH_FAIL_CODE" -eq 1 ]] ||
+    fail_step "expected exit 1 when agentwiki refuses, got $PUBLISH_FAIL_CODE" "render --publish"
+CHECKS=$((CHECKS + 1))
+printf '%s' "$PUBLISH_FAIL" | grep -q '"code":"publish_failed"' ||
+    fail_step "expected a publish_failed envelope when agentwiki refuses" "render --publish"
 CHECKS=$((CHECKS + 1))
 
 # --- Ambiguous and unknown refs ---

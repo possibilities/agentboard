@@ -783,16 +783,14 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
             : "agentboard.html"),
       );
       writeFileSync(target, html);
-      let published: string | null = null;
-      if (publishing) published = publish(target);
-      const kept = out !== undefined || published === null;
+      const published = publishing ? publish(target) : null;
+      const kept = out !== undefined || !publishing;
       if (!kept) unlinkSync(target);
       return {
         data: { path: kept ? target : null, bytes: html.length, published },
-        human:
-          published === null
-            ? `wrote ${target}`
-            : `${kept ? `wrote ${target}\n` : ""}published: ${published}`,
+        human: publishing
+          ? `${kept ? `wrote ${target}\n` : ""}published: ${publishedLine(published)}`
+          : `wrote ${target}`,
       };
     },
   },
@@ -807,8 +805,12 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 };
 
-/** agentboard never serves anything; the human view is agentwiki's business. */
-function publish(file: string): string {
+/** agentboard never serves anything; the human view is agentwiki's business.
+ * The envelope is the contract across that seam, not the human lines — so this
+ * asks for --json and keeps agentwiki's `data` verbatim. Parsing the printed
+ * text instead would make any cosmetic edit over there a silent change to what
+ * `render --publish` returns. */
+function publish(file: string): unknown {
   const binary = Bun.which("agentwiki");
   if (binary === null) {
     throw new CliError(
@@ -818,19 +820,41 @@ function publish(file: string): string {
     );
   }
   const result = Bun.spawnSync(
-    [binary, "publish", file, "--name", "agentboard", "--kind", "render"],
+    [binary, "publish", file, "--name", "agentboard", "--kind", "render", "--json"],
     {
       stdout: "pipe",
       stderr: "pipe",
     },
   );
-  if (result.exitCode !== 0) {
+  const stdout = new TextDecoder().decode(result.stdout).trim();
+  const stderr = new TextDecoder().decode(result.stderr).trim();
+  let envelope: { ok?: unknown; error?: { message?: unknown; recovery?: unknown } | null };
+  try {
+    envelope = JSON.parse(stdout) as typeof envelope;
+  } catch {
+    // agentwiki prints no envelope for a usage fault (its exit 2), so a
+    // failure to parse means the call itself does not match its grammar.
     throw new CliError(
       "publish_failed",
-      `agentwiki publish exited ${result.exitCode}: ${new TextDecoder().decode(result.stderr).trim()}`,
+      `agentwiki publish exited ${result.exitCode} without a JSON envelope: ${stderr === "" ? stdout : stderr}`,
     );
   }
-  return new TextDecoder().decode(result.stdout).trim();
+  if (envelope.ok !== true) {
+    const error = envelope.error ?? {};
+    const message = typeof error.message === "string" ? error.message : `exited ${result.exitCode}`;
+    const recovery = typeof error.recovery === "string" ? error.recovery : undefined;
+    throw new CliError("publish_failed", `agentwiki publish refused: ${message}`, recovery);
+  }
+  return (envelope as { data?: unknown }).data ?? null;
+}
+
+/** One published artifact, said in a line: whatever agentwiki named it. */
+function publishedLine(published: unknown): string {
+  const data = (published ?? {}) as Record<string, unknown>;
+  const name = typeof data["name"] === "string" ? data["name"] : "agentboard";
+  const version = typeof data["version"] === "string" ? data["version"].slice(0, 12) : "unknown";
+  const url = typeof data["url"] === "string" ? ` ${data["url"]}` : "";
+  return `${name}@${version}${url}`;
 }
 
 /** Parsed but not yet run: `main` needs the flags before the board is touched,
