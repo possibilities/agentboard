@@ -12,7 +12,6 @@ import { CliError } from "./errors.ts";
 import type { ItemState } from "./types.ts";
 
 export const PLACEMENTS = ["first", "next", "last", "after"] as const;
-export type PlacementName = (typeof PLACEMENTS)[number];
 
 export type Placement =
   | { at: "first" }

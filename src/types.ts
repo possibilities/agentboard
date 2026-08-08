@@ -117,10 +117,6 @@ export function isTerminal(state: ItemState): boolean {
   return TERMINAL_STATES.includes(state);
 }
 
-export function isLive(item: Item): boolean {
-  return item.deletedAt === null;
-}
-
 /** Live and not finished: the set every listing, brief, and ready query starts from. */
 export function isOpenWork(item: Item): boolean {
   return item.deletedAt === null && !isTerminal(item.state);

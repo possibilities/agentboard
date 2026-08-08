@@ -16,7 +16,6 @@ import * as format from "./format.ts";
 import { blockersOf, containsForest, readyItems } from "./graph.ts";
 import { applyGroomDraft, buildGroomExport, parseGroomDraft } from "./groom.ts";
 import { buildGuide } from "./guide.ts";
-import { HELP } from "./help.ts";
 import type { Placement } from "./order.ts";
 import type { Environ } from "./paths.ts";
 import { renderBoard } from "./render.ts";
@@ -801,14 +800,6 @@ function publish(file: string): string {
     );
   }
   return new TextDecoder().decode(result.stdout).trim();
-}
-
-export function commandNames(): string[] {
-  return Object.keys(COMMAND_TABLE);
-}
-
-export function commandHelp(name: string): string | undefined {
-  return HELP[name];
 }
 
 export function runCommand(
