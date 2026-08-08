@@ -31,6 +31,23 @@ table, `COMMANDS`, and `HELP` must name the same commands, and a test pins it.
 byte-identical in the agentwiki repo; changing one here means porting the change
 there in the same working session.
 
+## Agent skills
+
+`skills/board/SKILL.md` (driving the board) and `skills/groom/SKILL.md` (bulk
+reshaping through drafts) are the canonical deep runbooks — the advertised ones,
+since every agent session lists an installed skill's name and description. Funk
+installs them globally with `npx skills add` against this checkout, which finds
+them by the nested `skills/<name>/SKILL.md` layout. Each directory is
+self-contained and ships separately, so neither may reference the other by path:
+`skills/groom/example-draft.json` is a real draft that really applied, and the
+`agents/openai.yaml` beside each `SKILL.md` is the Codex-side manifest.
+
+`--agent-help` stays the in-binary fallback and names both skills; a test pins
+that. The skills document the CLI as installed, so a change to a command's
+behavior, an error code, or a refusal means re-verifying their claims against
+the live CLI — writes against a throwaway `--db`, never the real board — before
+editing their prose.
+
 ## Load-bearing decisions
 
 `docs/adr/` records them, one file each: SQLite is the source of truth, one

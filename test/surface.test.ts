@@ -6,7 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import packageJson from "../package.json" with { type: "json" };
 import { COMMAND_TABLE } from "../src/cli.ts";
-import { COMMANDS, HELP, VERSION } from "../src/help.ts";
+import { AGENT_HELP, COMMANDS, HELP, VERSION } from "../src/help.ts";
 
 describe("the command surface", () => {
   const table = Object.keys(COMMAND_TABLE).sort();
@@ -31,4 +31,11 @@ describe("the command surface", () => {
 
 test("help.ts VERSION matches the package version", () => {
   expect(VERSION).toBe(packageJson.version);
+});
+
+// The skills are the advertised runbooks and ship from skills/; agent-help
+// points at them, so an agent that only ever reads the binary still finds them.
+test("the agent runbook names both agent skills", () => {
+  expect(AGENT_HELP).toContain("`board`");
+  expect(AGENT_HELP).toContain("`groom`");
 });

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Board"
+  short_description: "Capture, order, claim, and finish work on the board"
+  default_prompt: "Use $board to capture, claim, and close work on the planning board."
+policy:
+  allow_implicit_invocation: true

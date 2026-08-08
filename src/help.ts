@@ -153,6 +153,9 @@ envelope on stdout — exit 0 on success, exit 1 with ok:false and a snake_case
 error.code on a domain failure; a usage fault prints help on stderr and exits 2
 without an envelope.
 
+Deep runbooks: the \`board\` and \`groom\` agent skills, installed globally; this
+text is the in-binary fallback.
+
 Full machine card: agentboard guide --json
 `;
 

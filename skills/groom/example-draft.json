@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "draftId": "checkout-reshape-2026-08-08",
+  "baseRevision": "br1-35cd6428c9da7ebd89e40a6a1eccbfe3758a52fdb0b6c64d720cdf3248c35238",
+  "scope": "the checkout work",
+  "scopeItemIds": ["it-53038a5b", "it-ec16b20a", "it-15b082c1", "it-f955cd30"],
+  "summary": "Split the checkout rewrite into the two pieces it actually is, merge the duplicate timeout capture into the one that carries the detail, and drop the legacy page deletion the rewrite subsumes.",
+  "operations": [
+    {
+      "op": "create-item",
+      "tempId": "steps",
+      "label": "split the checkout form into steps",
+      "summary": "One page per decision: cart, address, payment.",
+      "tags": ["checkout"],
+      "origin": "agent"
+    },
+    {
+      "op": "create-item",
+      "tempId": "gateway",
+      "label": "move checkout payment to the new gateway",
+      "summary": "Swap the payment step onto the new gateway once it is live.",
+      "tags": ["checkout", "payments"],
+      "origin": "agent"
+    },
+    { "op": "add-relation", "kind": "contains", "from": "it-53038a5b", "to": "steps" },
+    { "op": "add-relation", "kind": "contains", "from": "it-53038a5b", "to": "gateway" },
+    {
+      "op": "add-relation",
+      "kind": "depends-on",
+      "from": "gateway",
+      "to": "it-1afb2fac",
+      "note": "the gateway has to be live before checkout can move onto it"
+    },
+    {
+      "op": "update-item",
+      "id": "it-ec16b20a",
+      "summary": "3G users see a spinner then a 504. Captured twice; this item carries the detail.",
+      "note": "absorbed the duplicate capture"
+    },
+    {
+      "op": "close-item",
+      "id": "it-15b082c1",
+      "state": "superseded",
+      "reason": "the same bug as \"checkout times out on slow networks\", which carries the reproduction"
+    },
+    {
+      "op": "add-relation",
+      "kind": "supersedes",
+      "from": "it-ec16b20a",
+      "to": "it-15b082c1"
+    },
+    {
+      "op": "remove-relation",
+      "kind": "contains",
+      "from": "it-53038a5b",
+      "to": "it-f955cd30"
+    },
+    {
+      "op": "close-item",
+      "id": "it-f955cd30",
+      "state": "cancelled",
+      "reason": "the rewrite removes the legacy page as a matter of course"
+    }
+  ]
+}

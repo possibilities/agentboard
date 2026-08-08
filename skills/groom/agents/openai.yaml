@@ -1,0 +1,6 @@
+interface:
+  display_name: "Groom"
+  short_description: "Reshape the board in bulk with one atomic draft"
+  default_prompt: "Use $groom to reshape several board items in one draft."
+policy:
+  allow_implicit_invocation: true
