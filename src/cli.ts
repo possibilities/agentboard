@@ -802,23 +802,30 @@ function publish(file: string): string {
   return new TextDecoder().decode(result.stdout).trim();
 }
 
-export function runCommand(
-  name: string,
-  argv: string[],
-  env: Environ,
-  home: string,
-): { output: CommandOutput; flags: ParsedFlags; close: () => void } {
+/** Parsed but not yet run: `main` needs the flags before the board is touched,
+ * so that a domain failure prints in whichever mode the caller asked for. */
+export interface PreparedCommand {
+  name: string;
+  flags: ParsedFlags;
+}
+
+export function parseCommand(name: string, argv: string[]): PreparedCommand {
   const command = COMMAND_TABLE[name];
   if (command === undefined) throw new UsageError(`unknown command "${name}"`);
-  const flags = parseFlags(argv, command.spec);
+  return { name, flags: parseFlags(argv, command.spec) };
+}
+
+export function runPrepared(
+  prepared: PreparedCommand,
+  env: Environ,
+  home: string,
+): { output: CommandOutput; close: () => void } {
+  const command = COMMAND_TABLE[prepared.name]!;
+  const { flags } = prepared;
   const dbPath = resolveDatabasePath(flags.values["db"], env, home);
   const board = new Board(openBoard(dbPath));
   try {
-    return {
-      output: command.run({ board, dbPath, flags, env }),
-      flags,
-      close: () => board.close(),
-    };
+    return { output: command.run({ board, dbPath, flags, env }), close: () => board.close() };
   } catch (error) {
     board.close();
     throw error;

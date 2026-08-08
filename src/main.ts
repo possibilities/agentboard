@@ -8,7 +8,7 @@
  * actually ran.
  */
 
-import { runCommand } from "./cli.ts";
+import { type PreparedCommand, parseCommand, runPrepared } from "./cli.ts";
 import { failure, success } from "./envelope.ts";
 import { CliError, UsageError } from "./errors.ts";
 import { AGENT_HELP, AGENT_TEASER, HELP, TOP_HELP, VERSION } from "./help.ts";
@@ -84,11 +84,25 @@ function main(raw: string[]): number {
     return 0;
   }
 
-  const json = rest.includes("--json");
+  // Parsed before anything runs, so success and failure agree on the output
+  // mode: a raw argv scan disagrees with the grammar after `--`, and used to
+  // print a JSON envelope for a failure whose success would have been human.
+  let prepared: PreparedCommand;
   try {
-    const { output, flags, close } = runCommand(command, rest, process.env, homeDirectory());
+    prepared = parseCommand(command, rest);
+  } catch (error) {
+    if (!(error instanceof UsageError)) throw error;
+    console.error(error.message);
+    console.error(HELP[command] ?? TOP_HELP);
+    return 2;
+  }
+
+  const { flags } = prepared;
+  const json = flags.bools.has("json");
+  try {
+    const { output, close } = runPrepared(prepared, process.env, homeDirectory());
     try {
-      if (flags.bools.has("json")) {
+      if (json) {
         emit(JSON.stringify(success(SCHEMA_VERSION, output.data)));
       } else if (flags.bools.has("jsonl") && output.lines !== undefined) {
         for (const record of output.lines) console.log(JSON.stringify(record));
