@@ -8,7 +8,7 @@ use its canonical terms in code, comments, and commit messages.
 ## Commands
 
 `package.json` has the scripts; `bun run check` is the gate for every commit.
-The one that is not in there: `bash scripts/smoke.sh` runs all 31 commands end
+The one that is not in there: `bash scripts/smoke.sh` runs all 32 commands end
 to end against a throwaway board.
 
 ## Map

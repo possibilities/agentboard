@@ -32,6 +32,7 @@ export const COMMANDS = [
   { name: "tree", summary: "Show the containment forest" },
   { name: "graph", summary: "Export every node and edge as JSON" },
   { name: "brief", summary: "Summarize the board, read or spoken" },
+  { name: "state", summary: "The budget-capped bearings dump for agents" },
   { name: "groom", summary: "Export a grooming draft, or apply one atomically" },
   { name: "rm", summary: "Tombstone an item, keeping its rank and history" },
   { name: "restore", summary: "Bring a removed item back to the rank it held" },
@@ -88,6 +89,8 @@ Reading (safe anytime)
                                           blocked, waiting, paused.
   agentboard brief --spoken               The same board as speakable prose —
                                           labels only, never ids or paths.
+  agentboard state                        The bearings dump: counts plus what
+                                          fits a token budget; silent when clear.
   agentboard list --state open --json     Filter by state; --tag filters by tag.
   agentboard get "the auth cleanup" --json  One item with relations, refs, and
                                           the blockers keeping it out of ready.
@@ -355,6 +358,18 @@ Usage:
 
 --spoken renders speakable prose: labels only, never ids, hashes, or paths. Every
 live unfinished item produces a line, so silence means the board is truly empty.
+`,
+  state: `agentboard state — the bearings dump
+
+Usage:
+  agentboard state [--budget <tokens>] [--json]
+
+The cross-tool agent* state dump: a counts header that accounts for everything
+open, label-only lines for what fits --budget (approximate tokens, default 400,
+~4 characters each), (+N more) for what does not, and no output at all when the
+board is clear — silence is the all-clear. Distinct from item state: this is
+bearings for a re-orienting agent. Reading the board in full is brief; acting
+on it is ready and claim.
 `,
   groom: `agentboard groom — the only bulk-mutation path
 

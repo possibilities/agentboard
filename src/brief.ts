@@ -136,3 +136,73 @@ export function speakBrief(brief: Brief, open: readonly Item[]): string {
   }
   return lines.join("\n");
 }
+
+/** ~4 characters per token, the estimate the agent* state contract uses. */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+function capped(rendered: readonly string[], cap: number): string {
+  const shown = rendered.slice(0, cap);
+  const hidden = rendered.length - shown.length;
+  return shown.join(" · ") + (hidden > 0 ? ` (+${hidden} more)` : "");
+}
+
+/**
+ * The state dump: the cross-tool bearings section (`agentboard state`) an
+ * agent reads to re-orient — distinct from item state. Markdown for a model:
+ * a counts header that accounts for everything open even when the budget
+ * names only some of it, label-only lines (ids are never part of bearings),
+ * and the empty string when the board is clear — in the agent* state
+ * contract, silence is the all-clear.
+ */
+export function stateDump(brief: Brief, budget: number): string {
+  const { counts } = brief;
+  if (counts.open === 0) return "";
+
+  const group = (key: BriefGroup["key"]): Item[] =>
+    brief.groups.find((candidate) => candidate.key === key)?.items ?? [];
+
+  const underway = group("active").map(
+    (item) => item.label + (item.claim === null ? "" : ` (${item.claim.agent})`),
+  );
+  const ready = group("ready").map((item) => item.label);
+  const blocked = group("blocked").map((item) => {
+    const waits = brief.blockers[item.id] ?? [];
+    return waits.length === 0 ? item.label : `${item.label} ← ${waits[0]}`;
+  });
+  const aside = (["waiting", "paused", "other"] as const)
+    .map((key) => ({ key, count: group(key).length }))
+    .filter((entry) => entry.count > 0)
+    .map((entry) => `${entry.count} ${entry.key === "other" ? "also open" : entry.key}`);
+
+  const headerParts = [
+    ...(counts.active > 0 ? [`${counts.active} underway`] : []),
+    ...(counts.ready > 0 ? [`${counts.ready} ready`] : []),
+    ...(counts.blocked > 0 ? [`${counts.blocked} blocked`] : []),
+    `${counts.open} open`,
+  ];
+
+  // Start from generous caps and shrink the longest enumerations first until
+  // the dump fits the budget; the header, the aside counts, and the trailer
+  // are never dropped, so everything open stays accounted for.
+  const caps = { underway: 5, ready: 10, blocked: 3 };
+  const compose = (): string => {
+    const lines = [`## board — ${headerParts.join(" · ")}`];
+    if (underway.length > 0) lines.push(`underway: ${capped(underway, caps.underway)}`);
+    if (ready.length > 0) lines.push(`ready: ${capped(ready, caps.ready)}`);
+    if (blocked.length > 0) lines.push(`blocked: ${capped(blocked, caps.blocked)}`);
+    if (aside.length > 0) lines.push(`also: ${aside.join(" · ")}`);
+    lines.push("more: agentboard brief · next: agentboard ready");
+    return lines.join("\n");
+  };
+
+  let dump = compose();
+  for (const key of ["ready", "blocked", "underway"] as const) {
+    while (estimateTokens(dump) > budget && caps[key] > 1) {
+      caps[key] -= 1;
+      dump = compose();
+    }
+  }
+  return dump;
+}

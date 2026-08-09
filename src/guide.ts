@@ -91,6 +91,11 @@ export function buildGuide(dbPath: string): unknown {
       guarantee:
         "Labels only — never an id, hash, or path. Every live unfinished item produces at least one line, so silence can only mean the board is empty.",
     },
+    bearings: {
+      state_dump: "agentboard state [--budget <tokens>]",
+      guarantee:
+        "The counts header accounts for everything open even when the budget names only some of it; no output at all means the board is clear.",
+    },
     integration: {
       render: "agentboard render --out <path> [--publish] writes one self-contained HTML file.",
       publish:
@@ -156,6 +161,7 @@ export function buildGuide(dbPath: string): unknown {
       "tree",
       "graph",
       "brief",
+      "state",
       "groom export",
       "export",
       "render",

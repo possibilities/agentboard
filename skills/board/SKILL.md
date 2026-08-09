@@ -46,6 +46,7 @@ document and the installed binary disagree, the binary wins; see
 agentboard guide --json     # the machine card: model, states, codes, commands
 agentboard ready --json     # what can be picked up right now
 agentboard brief            # the grouped summary of everything live
+agentboard state            # the bearings dump; silent when the board is clear
 ```
 
 `guide` needs no database and will not conjure one, so it is always safe. The
@@ -102,6 +103,13 @@ the item out of it.
 only — never an id, a hash, or a path — and every live unfinished item produces
 at least one line, so silence can only mean the board is empty. Use it whenever
 the answer is going to be heard rather than read.
+
+`state` is the bearings surface — the board's entry in the cross-tool `agent*`
+state convention, for re-orienting cheaply at the start of a session or after
+a context gap: a counts header that accounts for everything open, label-only
+lines for what fits `--budget` (approximate tokens, default 400), `(+N more)`
+for what does not, and no output at all when the board is clear. It answers
+"where were we"; `ready` and `claim` are still how you act.
 
 `list` defaults to live and unfinished. `search` spans every live item
 including closed ones, which is how you find what a topic was called before it

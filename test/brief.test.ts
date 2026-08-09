@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildBrief, speakBrief } from "../src/brief.ts";
+import { buildBrief, speakBrief, stateDump } from "../src/brief.ts";
 import type { Edge } from "../src/graph.ts";
 import { ITEM_STATES, type Item, type ItemState, isOpenWork } from "../src/types.ts";
 import { fakeItem, seeded } from "./helpers.ts";
@@ -94,5 +94,63 @@ describe("the spoken brief", () => {
     const brief = buildBrief([rogue], []);
     expect(brief.groups.find((group) => group.key === "other")?.items).toHaveLength(1);
     expect(speakBrief(brief, [rogue])).toContain("the rogue item");
+  });
+});
+
+describe("the state dump", () => {
+  const dump = (items: Item[], edges: Edge[] = [], budget = 400): string =>
+    stateDump(buildBrief(items, edges), budget);
+
+  test("is silent exactly when the board is clear", () => {
+    expect(dump([])).toBe("");
+    expect(dump([fakeItem({ id: "it-1", label: "done thing", state: "done" })])).toBe("");
+    expect(dump([fakeItem({ id: "it-1", label: "one thing" })])).not.toBe("");
+  });
+
+  test("accounts for everything open in the header and never prints ids", () => {
+    const items = [
+      fakeItem({
+        id: "it-aaaa1111",
+        label: "ship the flow",
+        state: "active",
+        claim: { agent: "codex", at: "now" },
+      }),
+      fakeItem({ id: "it-bbbb2222", label: "polish the charts", rank: 1 }),
+      fakeItem({ id: "it-cccc3333", label: "waiting thing", state: "waiting", rank: 2 }),
+    ];
+    const text = dump(items);
+    expect(text).toMatch(/^## board — 1 underway · 1 ready · 3 open$/m);
+    expect(text).toContain("underway: ship the flow (codex)");
+    expect(text).toContain("ready: polish the charts");
+    expect(text).toContain("also: 1 waiting");
+    expect(text).toContain("more: agentboard brief");
+    expect(text).not.toMatch(/it-[0-9a-f]/);
+  });
+
+  test("says what a blocked item waits on", () => {
+    const items = [
+      fakeItem({ id: "it-1", label: "the log panel", rank: 0 }),
+      fakeItem({ id: "it-2", label: "the auth cleanup", rank: 1 }),
+    ];
+    const text = dump(items, [{ kind: "depends-on", from: "it-1", to: "it-2" }]);
+    expect(text).toContain("blocked: the log panel ← the auth cleanup");
+  });
+
+  test("shrinks enumerations to the budget but keeps the counts honest", () => {
+    const items: Item[] = [];
+    for (let index = 0; index < 12; index++) {
+      items.push(
+        fakeItem({
+          id: `it-${index}`,
+          label: `a rather long ready item label number ${index}`,
+          rank: index,
+        }),
+      );
+    }
+    const text = dump(items, [], 60);
+    expect(text).toMatch(/^## board — 12 ready · 12 open$/m);
+    expect(text).toMatch(/\(\+\d+ more\)/);
+    expect(text).not.toContain("number 11");
+    expect(text).toContain("more: agentboard brief");
   });
 });

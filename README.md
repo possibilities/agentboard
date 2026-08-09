@@ -22,7 +22,7 @@ symlink and leaves the board database alone.
 
 ## Use
 
-`agentboard --help` lists all 31 commands. The mechanics worth knowing before
+`agentboard --help` lists all 32 commands. The mechanics worth knowing before
 you read them:
 
 `--to next` queues behind every item an agent is already working, not just the
@@ -52,7 +52,13 @@ agentboard render --out board.html --publish   # --publish needs agentwiki on PA
 agentboard --agent-teaser     # one line
 agentboard --agent-help       # the runbook
 agentboard guide --json       # the machine card
+agentboard state              # the bearings dump; silent when the board is clear
 ```
+
+`state` is the board's entry in the cross-tool `agent*` state convention: a
+counts header that accounts for everything open, label-only lines for what
+fits `--budget` (approximate tokens, default 400), and no output at all on a
+clear board.
 
 `--json` emits the stable `{schema_version, ok, error, data}` envelope on
 stdout. Exit 0 on success, exit 1 with `ok:false` and a snake_case `error.code`

@@ -154,6 +154,8 @@ expect_ok graph
 expect_ok graph --jsonl
 expect_ok brief
 expect_ok brief --spoken
+expect_ok state
+expect_ok state --budget 200
 expect_ok guide --json
 
 # --- Capturing items ---

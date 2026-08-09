@@ -16,6 +16,11 @@ nothing else; it survives state changes, tombstoning, and restore. Placements ar
 (behind every item already underway, so running work is never displaced), `last`, and
 `after <ref>`. _Avoid_: position, index.
 
+**State dump** — the board's entry in the cross-tool `agent*` bearings convention
+(`agentboard state`): a budget-capped, label-only markdown section whose counts header accounts
+for everything open and whose absence means the board is clear. Distinct from item state below.
+_Avoid_: status, summary (that is `brief`).
+
 **State** — what is true of the work: `open`, `active`, `waiting`, `paused`, and the frozen
 terminal `done`, `superseded`, `cancelled`. Waiting and paused carry the reason that is their
 whole content. _Avoid_: status, blocked (see Ready).

@@ -8,7 +8,7 @@
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve as resolvePath } from "node:path";
-import { buildBrief, speakBrief } from "./brief.ts";
+import { buildBrief, speakBrief, stateDump } from "./brief.ts";
 import { openBoard, resolveDatabasePath } from "./db.ts";
 import { CliError, UsageError } from "./errors.ts";
 import { type FlagSpec, type ParsedFlags, parseFlags } from "./flags.ts";
@@ -579,6 +579,26 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
           spoken,
         },
         human: ctx.flags.bools.has("spoken") ? spoken : format.briefText(brief),
+      };
+    },
+  },
+
+  state: {
+    spec: spec(["--budget"]),
+    run(ctx) {
+      const raw = optionalValue(ctx.flags, "budget");
+      if (raw !== undefined && !/^\d+$/.test(raw.trim())) {
+        throw new UsageError("--budget takes a whole number of tokens, at least 60");
+      }
+      const budget = raw === undefined ? 400 : Number.parseInt(raw.trim(), 10);
+      if (budget < 60) {
+        throw new UsageError("--budget takes a whole number of tokens, at least 60");
+      }
+      const brief = buildBrief(ctx.board.liveItems(), ctx.board.liveEdges());
+      const dump = stateDump(brief, budget);
+      return {
+        data: { counts: brief.counts, budget, dump },
+        human: dump,
       };
     },
   },
