@@ -1,5 +1,7 @@
 # agentboard
 
+[![CI](https://github.com/possibilities/agentboard/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/possibilities/agentboard/actions/workflows/ci.yml)
+
 Agent-first planning board — linear-flavored but granularity-agnostic, built for
 voice-driven agents: capture, order, claim, and complete work ranging from
 one-line snippets to multi-part programs, with typed links into agentwiki.
