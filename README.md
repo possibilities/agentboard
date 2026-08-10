@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/possibilities/agentboard/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/possibilities/agentboard/actions/workflows/ci.yml)
 
-Agent-first planning board — linear-flavored but granularity-agnostic, built for
-voice-driven agents: capture, order, claim, and complete work ranging from
-one-line snippets to multi-part programs, with typed links into agentwiki.
+An agent-first planning board for voice-driven work: capture, order, claim, and
+finish anything from a one-line snippet to a multi-part program.
+Linear-flavored, granularity-agnostic, with typed links into agentwiki.
 
 One item type at every granularity. Ids are opaque and never spoken — every
 `<ref>` argument takes a label, a rough restatement of one, or any unambiguous
@@ -30,8 +30,8 @@ you read them:
 `--to next` queues behind every item an agent is already working, not just the
 first, so reprioritizing what comes next never displaces work in progress.
 
-Capture refuses a label that names work already open and says which item it
-already is — that refusal is the feature, and `--new` overrides it.
+Capture refuses a label that names work already open, and names the item it
+already is. That refusal is the feature; `--new` overrides it.
 
 Reshaping in bulk goes through a grooming draft, which is atomic, idempotent,
 and refused if the board moved underneath it:
