@@ -1,4 +1,4 @@
-# agentboard
+# AgentBoard
 
 [![CI](https://github.com/possibilities/agentboard/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/possibilities/agentboard/actions/workflows/ci.yml)
 
