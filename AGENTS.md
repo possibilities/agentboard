@@ -35,8 +35,8 @@ there in the same working session.
 
 `skills/board/SKILL.md` (driving the board) and `skills/groom/SKILL.md` (bulk
 reshaping through drafts) are the canonical deep runbooks — the advertised ones,
-since every agent session lists an installed skill's name and description. Funk
-installs them globally with `npx skills add` against this checkout, which finds
+since every agent session lists an installed skill's name and description. AgentStart's skills
+scan installs them globally with `npx skills add` against this checkout, which finds
 them by the nested `skills/<name>/SKILL.md` layout. Each directory is
 self-contained and ships separately, so neither may reference the other by path:
 `skills/groom/example-draft.json` is a real draft that really applied, and the
@@ -81,7 +81,7 @@ This checkout is one of the agent* fleet under `~/code`. Shared machinery
 lives in two siblings, and some changes here must cascade:
 
 - Skills under `skills/<name>/` ship globally through AgentStart's scan
-  (`~/code/agentstart/scripts/sync-skills`, run six-hourly by Funk's
+  (`~/code/agentstart/scripts/sync-skills`, run six-hourly by the scheduled
   updater): a SKILL.md edit is live within six hours, or on demand by
   running that script. Whether a new skill earns a TOOLS.md advertisement
   line is a deliberate decision — `agentwiki get tool-advertisement-policy`.
