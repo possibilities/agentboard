@@ -76,9 +76,18 @@ The board lives at `~/.local/share/agentboard/board.sqlite3`, overridable with
 
 ```sh
 bun install
-bun run check        # lint + typecheck + test
-bash scripts/smoke.sh   # every command against a throwaway database
+bun run check          # lint + typecheck + test
+bash scripts/smoke.sh  # every command against a throwaway database
 ```
+
+For a quick confidence check while iterating, run the focused test command first,
+then use the full check before sharing changes.
+
+## Testing notes
+
+Tests create temporary directories and databases, so local board data stays out
+of the test loop. The smoke script exercises the complete CLI surface from end
+to end.
 
 `CONTEXT.md` is the glossary — use its terms. `docs/adr/` records the decisions
 that are expensive to revisit.
