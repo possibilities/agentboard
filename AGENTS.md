@@ -36,7 +36,7 @@ there in the same working session.
 `skills/board/SKILL.md` (driving the board) and `skills/groom/SKILL.md` (bulk
 reshaping through drafts) are the canonical deep runbooks — the advertised ones,
 since every agent session lists an installed skill's name and description. AgentStart's skills
-scan copies them into its default `common` capability pack with `npx skills add --copy`
+scan copies them into the fixed private fleet resources with `npx skills add --copy`
 against this checkout, which finds
 them by the nested `skills/<name>/SKILL.md` layout. Each directory is
 self-contained and ships separately, so neither may reference the other by path:
@@ -81,12 +81,12 @@ queues behind work underway.
 This checkout is one of the agent* fleet under `~/code`. Shared machinery
 lives in two siblings, and some changes here must cascade:
 
-- Skills under `skills/<name>/` ship into AgentStart's default `common`
-  capability pack (`~/code/agentstart/scripts/sync-skills`, run six-hourly
-  by the scheduled updater). AgentLaunch composes the pack into managed
-  sessions: Claude Code exposes `/agent:<name>`, while Codex uses `$<name>`
-  and Pi uses `/<name>`. A SKILL.md edit is live within six hours, or on
-  demand by running that script. Whether a new skill earns a TOOLS.md
+- Skills under `skills/<name>/` ship into AgentStart's fixed private
+  fleet resources (`~/code/agentstart/scripts/sync-skills`, run six-hourly
+  by the scheduled updater). AgentLaunch loads them into every managed
+  session: Claude Code exposes `/agent:<name>`, Codex uses
+  `$agent:<name>`, and Pi uses `/<name>`. A SKILL.md edit is live within
+  six hours, or on demand by running that script. Whether a new skill earns a TOOLS.md
   advertisement line is a deliberate decision —
   `agentwiki get tool-advertisement-policy`.
 - Adding or removing a call to another fleet tool changes the fleet map:
