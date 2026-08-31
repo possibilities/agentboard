@@ -8,8 +8,10 @@ use its canonical terms in code, comments, and commit messages.
 ## Commands
 
 `package.json` has the scripts; `bun run check` is the gate for every commit.
-The one that is not in there: `bash scripts/smoke.sh` runs all 32 commands end
-to end against a throwaway board.
+The one that is not in there: `bash scripts/smoke.sh` runs every command that
+returns end to end against a throwaway board. `mcp` is not one of those — it
+serves until its transport closes — so `test/mcp.test.ts` spawns it and drives
+it with a real MCP client instead.
 
 ## Map
 
@@ -32,6 +34,16 @@ command's summary, flags, choices, defaults, and its `mutates` judgment exist in
 exactly one place. Adding a command means adding it to `contract.ts` and to
 `COMMAND_TABLE`; a test pins that the two agree, and another runs agentstart's
 validator over the emitted document.
+
+`mcp-tools.ts` is the whole contract → MCP mapping and nothing else: which
+leaves become tools, their names, input schemas, constraint keywords,
+annotations, the server's instructions, and how a tool call becomes parsed
+flags. It implements agentstart's `config/agent-contract/MCP.md`, which is
+normative and which six sibling CLIs also implement, so it stays dull and
+carries no dispatch. `mcp-server.ts` registers what it generates and dispatches
+each call through `COMMAND_TABLE` in this process; `mcp.ts` connects the stdio
+transport. There is no second list of tools: a command added to `contract.ts`
+becomes a tool with no other edit.
 
 `envelope.ts`, `errors.ts`, `flags.ts`, and `paths.ts` are copied
 byte-identical in the agentwiki repo; changing one here means porting the change

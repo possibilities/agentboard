@@ -24,6 +24,14 @@ import {
 
 export const VERSION = "0.1.0";
 
+/**
+ * The envelope's version, as `concepts.output_contract.envelope` describes it.
+ * It lives here rather than in `main.ts` because `main.ts` runs the CLI on
+ * import, so nothing may import it — and the MCP server builds the same
+ * envelope for a tool result that `main` prints for a terminal.
+ */
+export const SCHEMA_VERSION = 1;
+
 /** The contract document's own version, independent of the envelope's. */
 export const CONTRACT_VERSION = 1;
 
@@ -38,13 +46,22 @@ export interface ContractArgument {
   required?: boolean;
   positional?: boolean;
   repeatable?: boolean;
+  /** One comma-joined string rather than a repeated flag. Composes with
+   * `repeatable`; when set, `format` describes the ELEMENT. */
+  csv?: boolean;
   choices?: string[];
   default?: unknown;
   aliases?: string[];
+  minimum?: number;
+  maximum?: number;
+  /** What kind of knob this is. A consumer building a call surface exposes
+   * only `call`; the rest are concerns the caller already fixed. Absent means
+   * `call`. */
+  role?: "call" | "output-format" | "store-selection" | "meta";
 }
 
 export interface ContractConstraint {
-  kind: "one_of" | "conflicts" | "requires";
+  kind: "one_of" | "at_least_one" | "conflicts" | "requires";
   arguments: string[];
   required?: boolean;
   description?: string;
@@ -59,6 +76,9 @@ export interface ContractCommand {
   arguments?: ContractArgument[];
   constraints?: ContractConstraint[];
   subcommands?: ContractCommand[];
+  /** The command waits on something outside itself and may not return
+   * promptly. A caller with a request timeout needs to know before it calls. */
+  blocking?: boolean;
 }
 
 // --- Reusable argument shapes ---
@@ -110,12 +130,14 @@ export const GLOBAL_ARGUMENTS: ContractArgument[] = [
     type: "boolean",
     description:
       "Emit the stable {schema_version, ok, error, data} envelope. Preferred for agents.",
+    role: "output-format",
   },
   {
     name: "--jsonl",
     type: "boolean",
     description:
       "Emit one record per line where a command streams: list, search, ready, events, resolve, graph, export.",
+    role: "output-format",
   },
   {
     name: "--db",
@@ -124,12 +146,14 @@ export const GLOBAL_ARGUMENTS: ContractArgument[] = [
       "Board database; outranks AGENTBOARD_DB and the default path (~/.local/share/agentboard/board.sqlite3).",
     format: "path",
     direction: "in",
+    role: "store-selection",
   },
   {
     name: "--help",
     type: "boolean",
     description: "Print this command's help instead of running it. Never opens the board.",
     aliases: ["-h"],
+    role: "meta",
   },
 ];
 
@@ -169,7 +193,8 @@ export const COMMANDS: ContractCommand[] = [
       {
         name: "--tag",
         type: "string",
-        description: "Comma-joined tags in one value, not a repeated flag.",
+        description: "Tags to file the item under.",
+        csv: true,
       },
       {
         name: "--origin",
@@ -207,10 +232,16 @@ Examples:
       { name: "--title", type: "string", description: "New display title." },
       { name: "--summary", type: "string", description: "New description." },
     ],
-    guidance: `At least one of --label, --title, or --summary is required, and any combination
-may be given together. A rename recomputes the topic key, so renaming onto a
-topic another open item already holds is refused with existing_topic — supersede
-or relate the two instead. Terminal and removed items refuse the edit.
+    constraints: [
+      {
+        kind: "at_least_one",
+        arguments: ["--label", "--title", "--summary"],
+        description: "Any combination may be given together.",
+      },
+    ],
+    guidance: `A rename recomputes the topic key, so renaming onto a topic another open item
+already holds is refused with existing_topic — supersede or relate the two
+instead. Terminal and removed items refuse the edit.
 
 This is the single-item path; reshaping several items at once is a grooming
 draft, which is the only bulk-mutation path.
@@ -408,8 +439,9 @@ Examples:
       {
         name: "--id",
         type: "string",
-        description:
-          "Comma-joined refs in one value, not a repeated flag. The dictated sequence is preserved exactly.",
+        description: "The items to move; the dictated sequence is preserved exactly.",
+        csv: true,
+        format: "ref",
         required: true,
       },
       {
@@ -541,8 +573,9 @@ Examples:
       {
         name: "--budget",
         type: "integer",
-        description: "Approximate tokens (~4 characters each); at least 60.",
+        description: "Approximate tokens (~4 characters each).",
         default: 400,
+        minimum: 60,
       },
     ],
     guidance:
@@ -623,6 +656,22 @@ expansions for anything touched beyond it.`,
     arguments: [],
     guidance:
       "Needs no database and will not conjure one, so it is always safe. --help, --agent-help, and --agent-teaser are renders of this document.",
+  },
+  {
+    name: "mcp",
+    summary: "Serve the agent commands over MCP on stdio",
+    audience: "internal",
+    mutates: true,
+    blocking: true,
+    arguments: [],
+    guidance: `Speaks the Model Context Protocol on stdin and stdout and serves until that
+transport closes, so it is nonsense to run from a terminal — a host starts it.
+Every tool it exposes is generated from this contract and dispatched in this
+process; there is no second list of tools and no subprocess. Exactly the
+audience:agent leaves become tools, so this command is not one of them.
+
+The board it serves is fixed when it starts (--db, then AGENTBOARD_DB, then the
+default path), which is why --db and --json are not tool arguments.`,
   },
   {
     name: "export",
@@ -1016,6 +1065,36 @@ export function buildContract(dbPath: string): Record<string, unknown> {
 }
 
 // --- Derivations ---
+
+/**
+ * A constraint said in one line, authored once: `--help` prints it and the
+ * generated MCP tool descriptions carry it. The two spell an argument
+ * differently — `--label` at a terminal, `label` as a tool property — which is
+ * the whole reason `spell` exists.
+ */
+export function constraintSentence(
+  constraint: ContractConstraint,
+  spell: (name: string) => string = (name) => name,
+): string {
+  const members = constraint.arguments.map(spell);
+  const list = members.join(", ");
+  let head: string;
+  switch (constraint.kind) {
+    case "one_of":
+      head = `Give ${constraint.required === true ? "exactly" : "at most"} one of ${list}.`;
+      break;
+    case "at_least_one":
+      head = `Give at least one of ${list}.`;
+      break;
+    case "requires":
+      head = `${members[0]!} requires ${members.slice(1).join(", ")}.`;
+      break;
+    case "conflicts":
+      head = `${list} may not be combined.`;
+      break;
+  }
+  return constraint.description === undefined ? head : `${head} ${constraint.description}`;
+}
 
 export function findCommand(name: string): ContractCommand | undefined {
   return COMMANDS.find((command) => command.name === name);

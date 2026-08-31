@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# End-to-end smoke test: exercises every agentboard command against a
-# throwaway database and prints a readable transcript, failing loudly on the
-# first unexpected result. See scripts/install.sh for the house shell style
-# this follows (strict mode, small helper functions, prose comments).
+# End-to-end smoke test: exercises every agentboard command that returns
+# against a throwaway database and prints a readable transcript, failing loudly
+# on the first unexpected result. `mcp` is the one command left out — it serves
+# until its transport closes rather than returning, and test/mcp.test.ts drives
+# it with a real MCP client instead. See scripts/install.sh for the house shell
+# style this follows (strict mode, small helper functions, prose comments).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"

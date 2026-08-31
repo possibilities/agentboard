@@ -24,7 +24,7 @@ symlink and leaves the board database alone.
 
 ## Use
 
-`agentboard --help` lists all 32 commands. The mechanics worth knowing before
+`agentboard --help` lists all 33 commands. The mechanics worth knowing before
 you read them:
 
 `--to next` queues behind every item an agent is already working, not just the
@@ -62,6 +62,18 @@ counts header that accounts for everything open, label-only lines for what
 fits `--budget` (approximate tokens, default 400), and no output at all on a
 clear board.
 
+### As an MCP server
+
+```sh
+agentboard mcp        # stdio; a host starts this, not a person
+```
+
+Every tool it serves is generated from `guide --json` at startup and dispatched
+in the same process — exactly the commands the contract marks `audience: agent`,
+named by their full path (`groom export` becomes `groom_export`). `--db` and
+`--json` are not tool arguments: the board is fixed when the server starts, and
+every tool returns the same envelope the CLI prints.
+
 `--json` emits the stable `{schema_version, ok, error, data}` envelope on
 stdout. Exit 0 on success, exit 1 with `ok:false` and a snake_case `error.code`
 on a domain failure, exit 2 for a usage fault — which prints help on stderr and
@@ -77,7 +89,7 @@ The board lives at `~/.local/share/agentboard/board.sqlite3`, overridable with
 ```sh
 bun install
 bun run check          # lint + typecheck + test
-bash scripts/smoke.sh  # every command against a throwaway database
+bash scripts/smoke.sh  # every returning command against a throwaway database
 ```
 
 For a quick confidence check while iterating, run the focused test command first,
@@ -86,8 +98,9 @@ then use the full check before sharing changes.
 ## Testing notes
 
 Tests create temporary directories and databases, so local board data stays out
-of the test loop. The smoke script exercises the complete CLI surface from end
-to end.
+of the test loop. The smoke script exercises the complete returning CLI surface
+from end to end; `mcp` serves rather than returns, so `test/mcp.test.ts` spawns
+it and drives it with a real MCP client instead.
 
 `CONTEXT.md` is the glossary — use its terms. `docs/adr/` records the decisions
 that are expensive to revisit.

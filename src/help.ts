@@ -11,6 +11,7 @@ import {
   COMMANDS,
   type ContractArgument,
   type ContractCommand,
+  constraintSentence,
   ENTRYPOINT_FLAGS,
   GLOBAL_ARGUMENTS,
   VERSION,
@@ -134,6 +135,10 @@ function argumentLine(argument: ContractArgument): string {
   const head = argument.positional === true ? `<${argument.name}>` : flagToken(argument);
   const notes: string[] = [];
   if (argument.required === true) notes.push("required");
+  if (argument.csv === true) notes.push("comma-joined, one value");
+  if (argument.repeatable === true) notes.push("repeatable");
+  if (argument.minimum !== undefined) notes.push(`at least ${argument.minimum}`);
+  if (argument.maximum !== undefined) notes.push(`at most ${argument.maximum}`);
   if (argument.default !== undefined) notes.push(`default: ${String(argument.default)}`);
   return definition(head, [argument.description, ...notes.map((n) => `(${n})`)].join(" "), 26);
 }
@@ -153,6 +158,12 @@ function commandHelp(path: string[], command: ContractCommand): string {
     const heading = command.subcommands === undefined ? "Arguments:" : `Arguments (${body.name}):`;
     if (args.length > 0) {
       lines.push("", heading, ...args.map(argumentLine));
+    }
+    // A relation between arguments is stated once, in `constraints`; the usage
+    // line can only show a required one_of, so the rest are said here.
+    const constraints = body.constraints ?? [];
+    if (constraints.length > 0) {
+      lines.push("", ...constraints.map((c) => wrap(constraintSentence(c), 0)));
     }
     if (body.guidance !== undefined) lines.push("", wrap(body.guidance, 0));
   }
