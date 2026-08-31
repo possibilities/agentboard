@@ -119,7 +119,7 @@ was finished. Neither shows tombstones.
 
 ```bash
 agentboard ready --json                                  # 1. what is available
-agentboard claim "the auth cleanup" --agent <codex|claude|pi> --json # 2. take it
+agentboard claim "the auth cleanup" --agent <codex|claude> --json # 2. take it
 # ... do the work ...
 agentboard done "the auth cleanup" --note "rotated the tokens" --json   # 3. close it
 ```
@@ -317,7 +317,7 @@ agentboard get "the CSV export" --json
 
 ```bash
 agentboard ready --json
-agentboard claim "ship the CSV export" --agent <codex|claude|pi> --json
+agentboard claim "ship the CSV export" --agent <codex|claude> --json
 ```
 
 **"Why is nothing ready?"** Everything open is blocked, waiting, or paused —
