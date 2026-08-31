@@ -1,6 +1,6 @@
 /**
- * `guide` is listed read_only in the card it prints, and it only names the
- * database path — so running it must not be the reason a database exists.
+ * `guide` declares mutates:false in the contract it prints, and it only names
+ * the database path — so running it must not be the reason a database exists.
  */
 
 import { expect, test } from "bun:test";
@@ -24,11 +24,12 @@ test("guide does not bring a database into existence", () => {
     const envelope = JSON.parse(new TextDecoder().decode(result.stdout).trim());
     expect(envelope.ok).toBe(true);
     // It still reports the path it would have used — that is the card's job.
-    expect(envelope.data.db_path).toBe(db);
+    expect(envelope.data.concepts.storage.db_path).toBe(db);
 
     expect(existsSync(db)).toBe(false);
     expect(existsSync(join(directory, "absent"))).toBe(false);
-    expect(readdirSync(directory)).toEqual([]);
+    // The runtime itself makes ~/Library under a fresh HOME; nothing else may appear.
+    expect(readdirSync(directory).filter((entry) => entry !== "Library")).toEqual([]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

@@ -274,7 +274,7 @@ agentboard order --id "first,second,third" --to next --json
 ## Discovery and drift
 
 ```bash
-agentboard guide --json        # .grooming — operations, close states, limits, scope and staleness rules
+agentboard guide --json        # .concepts.grooming — operations, close states, limits, scope and staleness rules
 agentboard groom --help        # the command's own contract
 agentboard --agent-help        # the in-binary runbook (this skill is the deep one)
 ```

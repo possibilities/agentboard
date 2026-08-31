@@ -22,10 +22,16 @@ that owns every write. A new module that needs both is usually two modules.
   every mutation, the audit trail), `groom.ts`
 - Surface: `main.ts` (exit codes, envelope printing), `cli.ts` (the command
   table; one function per command, no printing), `format.ts`, `render.ts`,
-  `help.ts`, `guide.ts`
+  `contract.ts`, `help.ts`
 
-`help.ts` and `guide.ts` are the human help and the machine card; the command
-table, `COMMANDS`, and `HELP` must name the same commands, and a test pins it.
+`contract.ts` is the single authorship of the command surface: the fleet agent
+contract (agentstart's `config/agent-contract/schema.json`), emitted verbatim by
+`guide --json`. `help.ts` renders `--help`, `--agent-help`, and `--agent-teaser`
+from it, and `cli.ts` derives every command's flag grammar from it — so a
+command's summary, flags, choices, defaults, and its `mutates` judgment exist in
+exactly one place. Adding a command means adding it to `contract.ts` and to
+`COMMAND_TABLE`; a test pins that the two agree, and another runs agentstart's
+validator over the emitted document.
 
 `envelope.ts`, `errors.ts`, `flags.ts`, and `paths.ts` are copied
 byte-identical in the agentwiki repo; changing one here means porting the change

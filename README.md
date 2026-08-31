@@ -53,7 +53,7 @@ agentboard render --out board.html --publish   # --publish needs agentwiki on PA
 ```sh
 agentboard --agent-teaser     # one line
 agentboard --agent-help       # the runbook
-agentboard guide --json       # the machine card
+agentboard guide --json       # the fleet agent contract, version 1
 agentboard state              # the bearings dump; silent when the board is clear
 ```
 

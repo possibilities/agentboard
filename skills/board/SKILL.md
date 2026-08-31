@@ -43,7 +43,7 @@ document and the installed binary disagree, the binary wins; see
 ## First contact
 
 ```bash
-agentboard guide --json     # the machine card: model, states, codes, commands
+agentboard guide --json     # the agent contract: model, states, codes, commands
 agentboard ready --json     # what can be picked up right now
 agentboard brief            # the grouped summary of everything live
 agentboard state            # the bearings dump; silent when the board is clear
@@ -379,16 +379,17 @@ agentboard done "ship the CSV export" --note "landed in 1.4, docs updated" --jso
 The board teaches itself; prefer asking it over trusting memory:
 
 ```bash
-agentboard guide --json        # the stable machine card — model, codes, commands
+agentboard guide --json        # the stable agent contract — model, codes, commands
 agentboard --agent-help        # the in-binary runbook (this skill is the deep one)
 agentboard --agent-teaser      # one line
-agentboard --help              # all 31 commands
+agentboard --help              # every command, with its one-line summary
 agentboard <command> --help    # one command, without opening the board
 ```
 
 `guide --json` is the contract: item model, every state, every relation kind,
 order placements, resolution tiers, grooming rules, the envelope, the exit
-codes, and the full `error_codes` list. After an agentboard upgrade, read it
+codes, and the full `error_codes` list — all under `.concepts` — plus every
+command with its typed arguments under `.commands`. After an agentboard upgrade, read it
 and re-verify anything here that a release note touched.
 
 ## Sibling skills
