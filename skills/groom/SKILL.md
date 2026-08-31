@@ -274,7 +274,7 @@ agentboard order --id "first,second,third" --to next --json
 ## Discovery and drift
 
 ```bash
-agentboard guide --json        # .grooming — operations, close states, limits, scope and staleness rules
+agentboard guide --json        # .concepts.grooming — operations, close states, limits, scope and staleness rules
 agentboard groom --help        # the command's own contract
 agentboard --agent-help        # the in-binary runbook (this skill is the deep one)
 ```
@@ -283,9 +283,10 @@ agentboard --agent-help        # the in-binary runbook (this skill is the deep o
 and the exact wording of the scope, idempotency, and staleness rules. Read it
 after an agentboard upgrade and re-verify anything here that changed.
 
-Every applied grooming is kept: `agentboard export` includes the audit rows —
-the operations as applied, the full snapshot of every removed relation, and how
-each `tempId` resolved.
+Every applied grooming is kept — the operations as applied, the full snapshot of
+every removed relation, and how each `tempId` resolved. The audit rows are in
+the board and travel with the operator's `export`; nothing you apply is
+forgotten.
 
 ## Sibling skills
 

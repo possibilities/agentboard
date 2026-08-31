@@ -8,8 +8,10 @@ use its canonical terms in code, comments, and commit messages.
 ## Commands
 
 `package.json` has the scripts; `bun run check` is the gate for every commit.
-The one that is not in there: `bash scripts/smoke.sh` runs all 32 commands end
-to end against a throwaway board.
+The one that is not in there: `bash scripts/smoke.sh` runs every command that
+returns end to end against a throwaway board. `mcp` is not one of those — it
+serves until its transport closes — so `test/mcp.test.ts` spawns it and drives
+it with a real MCP client instead.
 
 ## Map
 
@@ -22,10 +24,42 @@ that owns every write. A new module that needs both is usually two modules.
   every mutation, the audit trail), `groom.ts`
 - Surface: `main.ts` (exit codes, envelope printing), `cli.ts` (the command
   table; one function per command, no printing), `format.ts`, `render.ts`,
-  `help.ts`, `guide.ts`
+  `contract.ts`, `help.ts`
 
-`help.ts` and `guide.ts` are the human help and the machine card; the command
-table, `COMMANDS`, and `HELP` must name the same commands, and a test pins it.
+`contract.ts` is the single authorship of the command surface: the fleet agent
+contract (agentstart's `config/agent-contract/schema.json`), emitted verbatim by
+`guide --json`. `help.ts` renders `--help`, `--agent-help`, and `--agent-teaser`
+from it, and `cli.ts` derives every command's flag grammar from it — so a
+command's summary, flags, choices, defaults, and its `mutates` judgment exist in
+exactly one place. Adding a command means adding it to `contract.ts` and to
+`COMMAND_TABLE`.
+
+Two judgments recur, and both are published rather than re-derived. `audience`
+decides what a generated call surface exposes, so it has to match what the
+skills teach: `render` is `agent` because the `board` skill teaches it as the
+handoff, and `export`/`import` are `operator` because they are a person's
+backup and restore pair. `mutates` is about this CLI's own state, never about a
+destination the caller named — `concepts.mutation` in the contract states that
+rule, which is why `export --out` is read-only and `render` is not.
+
+`test/contract.test.ts` pins the direction that can actually break: `cli.ts` is
+read for every flag its handlers name, and each one has to be declared. The
+reverse — a declared flag the parser rejects — is impossible, since `spec()` IS
+`commandFlags()`. That file also runs agentstart's validator over the emitted
+document, resolving it through `AGENTSTART_HOME`, then `~/code/agentstart`,
+then that checkout's worktrees; it skips only when agentstart is not installed
+at all, and fails naming every path it tried when the checkout is there and the
+script is not.
+
+`mcp-tools.ts` is the whole contract → MCP mapping and nothing else: which
+leaves become tools, their names, input schemas, constraint keywords,
+annotations, the server's instructions, and how a tool call becomes parsed
+flags. It implements agentstart's `config/agent-contract/MCP.md`, which is
+normative and which six sibling CLIs also implement, so it stays dull and
+carries no dispatch. `mcp-server.ts` registers what it generates and dispatches
+each call through `COMMAND_TABLE` in this process; `mcp.ts` connects the stdio
+transport. There is no second list of tools: a command added to `contract.ts`
+becomes a tool with no other edit.
 
 `envelope.ts`, `errors.ts`, `flags.ts`, and `paths.ts` are copied
 byte-identical in the agentwiki repo; changing one here means porting the change

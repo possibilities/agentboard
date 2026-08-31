@@ -9,14 +9,14 @@ import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve as resolvePath } from "node:path";
 import { buildBrief, speakBrief, stateDump } from "./brief.ts";
+import { buildContract, commandFlags, globalFlags } from "./contract.ts";
 import { openBoard, resolveDatabasePath } from "./db.ts";
 import { CliError, UsageError } from "./errors.ts";
 import { type FlagSpec, type ParsedFlags, parseFlags } from "./flags.ts";
 import * as format from "./format.ts";
 import { blockersOf, containsForest, readyItems } from "./graph.ts";
 import { applyGroomDraft, buildGroomExport, parseGroomDraft } from "./groom.ts";
-import { buildGuide } from "./guide.ts";
-import type { Placement } from "./order.ts";
+import { PLACEMENTS, type Placement } from "./order.ts";
 import type { Environ } from "./paths.ts";
 import { renderBoard } from "./render.ts";
 import { rankCandidates } from "./resolve.ts";
@@ -37,15 +37,18 @@ export interface CommandOutput {
   lines?: unknown[];
 }
 
-const GLOBAL: FlagSpec = {
-  value: new Set(["--db"]),
-  bool: new Set(["--json", "--jsonl", "--help"]),
-};
+const GLOBAL_FLAGS = globalFlags();
 
-function spec(value: string[] = [], bool: string[] = []): FlagSpec {
+/**
+ * The grammar is derived from the contract, never restated here: a command's
+ * flags, their types, and their choices are authored once in contract.ts, so
+ * an argument cannot exist in the parser and be missing from `guide --json`.
+ */
+function spec(name: string): FlagSpec {
+  const own = commandFlags(name);
   return {
-    value: new Set([...GLOBAL.value, ...value]),
-    bool: new Set([...GLOBAL.bool, ...bool]),
+    value: new Set([...GLOBAL_FLAGS.value, ...own.value]),
+    bool: new Set([...GLOBAL_FLAGS.bool, ...own.bool]),
   };
 }
 
@@ -56,9 +59,10 @@ export type BoardlessContext = Omit<Context, "board">;
 interface Command {
   spec: FlagSpec;
   /** The discriminant, so an entry in the table below still gets its `ctx`
-   * typed from which of the two shapes it is. */
+   * typed from which of the shapes it is. */
   boardless?: undefined;
   run(ctx: Context): CommandOutput;
+  serve?: undefined;
 }
 
 interface BoardlessCommand {
@@ -67,6 +71,22 @@ interface BoardlessCommand {
    * for one to come into existence. */
   boardless: true;
   run(ctx: BoardlessContext): CommandOutput;
+  serve?: undefined;
+}
+
+/**
+ * A command that serves rather than returns: it holds the process open until
+ * its transport closes, so it has no envelope, no human line, and no exit code
+ * until then. `mcp` is the only one, and `blocking: true` in the contract is
+ * how a caller is told before it calls.
+ */
+interface ServingCommand {
+  spec: FlagSpec;
+  boardless: true;
+  run?: undefined;
+  /** `home` as well as the usual context: this dispatches every later tool call
+   * itself, and each one resolves the board exactly as a fresh process would. */
+  serve(ctx: BoardlessContext & { home: string }): Promise<void>;
 }
 
 // --- Argument helpers ---
@@ -169,7 +189,10 @@ function listing(items: readonly Item[], empty: string): CommandOutput {
 }
 
 function parsePlacement(ctx: Context): Placement {
-  const to = oneOf(requireValue(ctx.flags, "to"), ["first", "next", "last", "after"], "--to");
+  // PLACEMENTS, never a hand-typed copy of it: the contract publishes this same
+  // list as --to's `choices` and as concepts.order.placements, and a fourth
+  // spelling here is the drift this whole surface exists to delete.
+  const to = oneOf(requireValue(ctx.flags, "to"), PLACEMENTS, "--to");
   if (to !== "after") return { at: to };
   const anchor = ctx.flags.positional.join(" ").trim();
   if (anchor.length === 0) throw new UsageError("--to after needs an item to place against");
@@ -193,9 +216,9 @@ function writeOut(path: string | undefined, body: string, fallback: string): str
 
 // --- Commands ---
 
-const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
+const COMMAND_TABLE: Record<string, Command | BoardlessCommand | ServingCommand> = {
   add: {
-    spec: spec(["--title", "--summary", "--tag", "--origin"], ["--new"]),
+    spec: spec("add"),
     run(ctx) {
       const label = positionalText(ctx.flags, "a label");
       const item = ctx.board.addItem({
@@ -215,7 +238,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   edit: {
-    spec: spec(["--label", "--title", "--summary"]),
+    spec: spec("edit"),
     run(ctx) {
       const label = optionalValue(ctx.flags, "label");
       const title = optionalValue(ctx.flags, "title");
@@ -234,7 +257,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   get: {
-    spec: spec(),
+    spec: spec("get"),
     run(ctx) {
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
       const relations = ctx.board
@@ -259,7 +282,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   list: {
-    spec: spec(["--state", "--tag"], ["--all"]),
+    spec: spec("list"),
     run(ctx) {
       const state = ctx.flags.values["state"];
       const tag = ctx.flags.values["tag"]?.trim().toLowerCase();
@@ -277,7 +300,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   search: {
-    spec: spec(),
+    spec: spec("search"),
     run(ctx) {
       const query = positionalText(ctx.flags, "a query").toLowerCase();
       const items = ctx.board.liveItems().filter((item) => {
@@ -291,7 +314,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   events: {
-    spec: spec(),
+    spec: spec("events"),
     run(ctx) {
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
       const events = ctx.board.events(item.id);
@@ -304,7 +327,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   resolve: {
-    spec: spec(),
+    spec: spec("resolve"),
     run(ctx) {
       const phrase = positionalText(ctx.flags, "a phrase");
       const candidates = rankCandidates(phrase, ctx.board.items()).map((candidate) => ({
@@ -333,7 +356,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   ready: {
-    spec: spec(),
+    spec: spec("ready"),
     run(ctx) {
       const items = readyItems(ctx.board.openItems(), ctx.board.liveEdges());
       return listing(items, "nothing is ready");
@@ -341,7 +364,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   claim: {
-    spec: spec(["--agent"]),
+    spec: spec("claim"),
     run(ctx) {
       // Grammar is checked before the board is touched, so a missing flag is a
       // usage fault whether or not the reference happened to resolve.
@@ -353,7 +376,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   release: {
-    spec: spec(),
+    spec: spec("release"),
     run(ctx) {
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
       const released = ctx.board.transition(item, "release");
@@ -362,7 +385,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   done: {
-    spec: spec(["--note"]),
+    spec: spec("done"),
     run(ctx) {
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
       const note = optionalValue(ctx.flags, "note");
@@ -372,7 +395,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   cancel: {
-    spec: spec(["--reason"]),
+    spec: spec("cancel"),
     run(ctx) {
       const reason = requireValue(ctx.flags, "reason");
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
@@ -382,7 +405,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   supersede: {
-    spec: spec(["--by", "--note"]),
+    spec: spec("supersede"),
     run(ctx) {
       const by = requireValue(ctx.flags, "by");
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
@@ -396,7 +419,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   wait: {
-    spec: spec(["--reason"]),
+    spec: spec("wait"),
     run(ctx) {
       const reason = requireValue(ctx.flags, "reason");
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
@@ -406,7 +429,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   pause: {
-    spec: spec(["--reason"]),
+    spec: spec("pause"),
     run(ctx) {
       const reason = requireValue(ctx.flags, "reason");
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
@@ -416,7 +439,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   resume: {
-    spec: spec(),
+    spec: spec("resume"),
     run(ctx) {
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
       const resumed = ctx.board.transition(item, "resume");
@@ -425,7 +448,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   order: {
-    spec: spec(["--id", "--to"]),
+    spec: spec("order"),
     run(ctx) {
       const refs = splitList(requireValue(ctx.flags, "id"));
       if (refs.length === 0) throw new UsageError("--id needs at least one item");
@@ -441,7 +464,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   relate: {
-    spec: spec(["--note"]),
+    spec: spec("relate"),
     run(ctx) {
       const [from, kind, to] = ctx.flags.positional;
       if (from === undefined || kind === undefined || to === undefined) {
@@ -464,7 +487,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   unrelate: {
-    spec: spec(),
+    spec: spec("unrelate"),
     run(ctx) {
       const [from, kind, to] = ctx.flags.positional;
       if (from === undefined || kind === undefined || to === undefined) {
@@ -485,7 +508,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   link: {
-    spec: spec(["--wiki", "--url", "--artifact", "--rel"]),
+    spec: spec("link"),
     run(ctx) {
       const rel = oneOf(ctx.flags.values["rel"] ?? "notes", REF_RELS, "--rel");
       const target = refTarget(ctx.flags);
@@ -496,7 +519,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   unlink: {
-    spec: spec(["--wiki", "--url", "--artifact"]),
+    spec: spec("unlink"),
     run(ctx) {
       const target = refTarget(ctx.flags);
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
@@ -506,7 +529,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   tree: {
-    spec: spec(["--root"]),
+    spec: spec("tree"),
     run(ctx) {
       const root = optionalValue(ctx.flags, "root");
       const items = ctx.board.liveItems();
@@ -526,7 +549,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   graph: {
-    spec: spec(),
+    spec: spec("graph"),
     run(ctx) {
       const items = ctx.board.liveItems();
       const nodes = items.map((item) => ({
@@ -562,7 +585,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   brief: {
-    spec: spec([], ["--spoken"]),
+    spec: spec("brief"),
     run(ctx) {
       const items = ctx.board.liveItems();
       const brief = buildBrief(items, ctx.board.liveEdges());
@@ -584,7 +607,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   state: {
-    spec: spec(["--budget"]),
+    spec: spec("state"),
     run(ctx) {
       const raw = optionalValue(ctx.flags, "budget");
       if (raw !== undefined && !/^\d+$/.test(raw.trim())) {
@@ -604,7 +627,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   groom: {
-    spec: spec(["--out"]),
+    spec: spec("groom"),
     run(ctx) {
       const [sub, ...rest] = ctx.flags.positional;
       if (sub === "export") {
@@ -651,7 +674,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   rm: {
-    spec: spec(["--reason"]),
+    spec: spec("rm"),
     run(ctx) {
       const reason = requireValue(ctx.flags, "reason");
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
@@ -664,7 +687,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   restore: {
-    spec: spec(["--reason"]),
+    spec: spec("restore"),
     run(ctx) {
       const item = ctx.board.resolve(positionalText(ctx.flags, "an item reference"));
       const restored = ctx.board.restore(item, optionalValue(ctx.flags, "reason"));
@@ -673,7 +696,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   export: {
-    spec: spec(["--out"]),
+    spec: spec("export"),
     run(ctx) {
       const records: unknown[] = [
         {
@@ -700,7 +723,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   import: {
-    spec: spec(),
+    spec: spec("import"),
     run(ctx) {
       const file = positionalText(ctx.flags, "a file");
       const text = readInput(file);
@@ -781,7 +804,7 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   render: {
-    spec: spec(["--out"], ["--publish"]),
+    spec: spec("render"),
     run(ctx) {
       const items = ctx.board.liveItems();
       const html = renderBoard({
@@ -816,11 +839,23 @@ const COMMAND_TABLE: Record<string, Command | BoardlessCommand> = {
   },
 
   guide: {
-    spec: spec(),
+    spec: spec("guide"),
     boardless: true,
     run(ctx) {
-      const guide = buildGuide(ctx.dbPath);
-      return { data: guide, human: JSON.stringify(guide, null, 2) };
+      const contract = buildContract(ctx.dbPath);
+      return { data: contract, human: JSON.stringify(contract, null, 2) };
+    },
+  },
+
+  mcp: {
+    spec: spec("mcp"),
+    boardless: true,
+    async serve(ctx) {
+      // Imported here, not at the top: the MCP server imports this module back
+      // for its dispatcher, and no other command should pay for loading the
+      // protocol SDK to run.
+      const { serveAgentboardMcp } = await import("./mcp.ts");
+      await serveAgentboardMcp({ env: ctx.env, home: ctx.home, dbPath: ctx.dbPath });
     },
   },
 };
@@ -890,12 +925,31 @@ export function parseCommand(name: string, argv: string[]): PreparedCommand {
   return { name, flags: parseFlags(argv, command.spec) };
 }
 
+/**
+ * A serving command, started; `undefined` for every command that returns an
+ * outcome instead. Kept apart from `runPrepared` because the two differ in
+ * kind: one produces a value to print, the other holds the process.
+ */
+export function servePrepared(
+  prepared: PreparedCommand,
+  env: Environ,
+  home: string,
+): Promise<void> | undefined {
+  const command = COMMAND_TABLE[prepared.name]!;
+  if (command.serve === undefined) return undefined;
+  const dbPath = resolveDatabasePath(prepared.flags.values["db"], env, home);
+  return command.serve({ dbPath, flags: prepared.flags, env, home });
+}
+
 export function runPrepared(
   prepared: PreparedCommand,
   env: Environ,
   home: string,
 ): { output: CommandOutput; close: () => void } {
   const command = COMMAND_TABLE[prepared.name]!;
+  if (command.run === undefined) {
+    throw new Error(`${prepared.name} serves rather than returns; call servePrepared`);
+  }
   const { flags } = prepared;
   const dbPath = resolveDatabasePath(flags.values["db"], env, home);
   if (command.boardless === true) {

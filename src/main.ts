@@ -8,12 +8,11 @@
  * actually ran.
  */
 
-import { type PreparedCommand, parseCommand, runPrepared } from "./cli.ts";
+import { type PreparedCommand, parseCommand, runPrepared, servePrepared } from "./cli.ts";
+import { SCHEMA_VERSION } from "./contract.ts";
 import { failure, success } from "./envelope.ts";
 import { CliError, UsageError } from "./errors.ts";
 import { AGENT_HELP, AGENT_TEASER, HELP, TOP_HELP, VERSION } from "./help.ts";
-
-export const SCHEMA_VERSION = 1;
 
 function emit(body: string): void {
   if (body.length > 0) console.log(body);
@@ -51,7 +50,9 @@ function hoistGlobals(argv: string[]): { globals: string[]; rest: string[] } {
   return { globals, rest: argv.slice(index) };
 }
 
-function main(raw: string[]): number {
+/** A number when the command returns an outcome; a promise while a serving
+ * command holds the process. */
+function main(raw: string[]): number | Promise<number> {
   const { globals, rest: argv } = hoistGlobals(raw);
   const command = argv[0];
   if (command === undefined || command === "--help" || command === "-h") {
@@ -100,7 +101,22 @@ function main(raw: string[]): number {
   const { flags } = prepared;
   const json = flags.bools.has("json");
   try {
-    const { output, close } = runPrepared(prepared, process.env, homeDirectory());
+    const home = homeDirectory();
+    // A serving command has no outcome to print: it holds the process until its
+    // transport closes, and its own failures go to stderr because stdout is
+    // that transport.
+    const serving = servePrepared(prepared, process.env, home);
+    if (serving !== undefined) {
+      return serving.then(
+        () => 0,
+        (error: unknown) => {
+          const detail = error instanceof Error ? error.message : String(error);
+          console.error(`agentboard ${command}: ${detail}`);
+          return 1;
+        },
+      );
+    }
+    const { output, close } = runPrepared(prepared, process.env, home);
     try {
       if (json) {
         emit(JSON.stringify(success(SCHEMA_VERSION, output.data)));
@@ -141,4 +157,6 @@ function homeDirectory(): string {
   return home;
 }
 
-process.exit(main(process.argv.slice(2)));
+const outcome = main(process.argv.slice(2));
+if (typeof outcome === "number") process.exit(outcome);
+else void outcome.then((code) => process.exit(code));

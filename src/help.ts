@@ -1,431 +1,280 @@
 /**
- * Help text. Three audiences, three shapes: `--help` orients a person,
- * `--agent-help` is a runbook an agent can follow without reading source, and
- * `guide --json` is the machine card. They must agree; when a command's
- * semantics change, all three change.
+ * Help text, rendered — never authored. Every line below comes out of the
+ * contract in `contract.ts`: `--help` orients a person, `--agent-help` is the
+ * runbook, `--agent-teaser` is one line, and `guide --json` is the same
+ * document as data. There is nothing here for a command's semantics to drift
+ * away from, because there is no second copy of them.
  */
 
-export const VERSION = "0.1.0";
+import {
+  buildContract,
+  COMMANDS,
+  type ContractArgument,
+  type ContractCommand,
+  constraintSentence,
+  ENTRYPOINT_FLAGS,
+  GLOBAL_ARGUMENTS,
+  VERSION,
+} from "./contract.ts";
 
-export const COMMANDS = [
-  { name: "add", summary: "Capture an item from spoken words" },
-  { name: "edit", summary: "Reword one item's label, title, or summary" },
-  { name: "get", summary: "Show one item with its relations, refs, and blockers" },
-  { name: "list", summary: "List the board in order, filtered by state or tag" },
-  { name: "search", summary: "Find items whose label, title, summary, or tags match" },
-  { name: "events", summary: "Show one item's append-only event log" },
-  { name: "resolve", summary: "Rank the items a spoken phrase could name" },
-  { name: "ready", summary: "List open items with no unfinished blockers, in order" },
-  { name: "claim", summary: "Take an item atomically for one agent" },
-  { name: "release", summary: "Give a claimed item back to the board" },
-  { name: "done", summary: "Close an item as finished" },
-  { name: "cancel", summary: "Close an item as cancelled, with a reason" },
-  { name: "supersede", summary: "Close an item as superseded by another" },
-  { name: "wait", summary: "Park an item on something outside the board" },
-  { name: "pause", summary: "Set an item aside deliberately" },
-  { name: "resume", summary: "Bring a waiting or paused item back" },
-  { name: "order", summary: "Move items to one place in the board's order" },
-  { name: "relate", summary: "Add a typed edge between two items" },
-  { name: "unrelate", summary: "Remove a typed edge between two items" },
-  { name: "link", summary: "Reference a wiki page, artifact, or URL from an item" },
-  { name: "unlink", summary: "Drop one of an item's outward references" },
-  { name: "tree", summary: "Show the containment forest" },
-  { name: "graph", summary: "Export every node and edge as JSON" },
-  { name: "brief", summary: "Summarize the board, read or spoken" },
-  { name: "state", summary: "The budget-capped bearings dump for agents" },
-  { name: "groom", summary: "Export a grooming draft, or apply one atomically" },
-  { name: "rm", summary: "Tombstone an item, keeping its rank and history" },
-  { name: "restore", summary: "Bring a removed item back to the rank it held" },
-  { name: "export", summary: "Eject the whole board as JSONL" },
-  { name: "import", summary: "Load an ejected board into an empty database" },
-  { name: "render", summary: "Write a self-contained HTML snapshot of the board" },
-  { name: "guide", summary: "Print the stable machine-readable agent contract" },
-] as const;
+export { VERSION };
 
-const COMMAND_LINES = COMMANDS.map(
-  (command) => `  ${command.name.padEnd(10)} ${command.summary}`,
-).join("\n");
+const WIDTH = 84;
 
-export const TOP_HELP = `agentboard — agent-first planning board
+/** The document with no database behind it: help never resolves a board path. */
+const CONTRACT = buildContract("") as {
+  meta: { purpose: string };
+  guidance: string;
+  concepts: {
+    ref_resolution: { accepts: string };
+    output_contract: { exit_codes: Record<string, string>; envelope: Record<string, string> };
+    error_codes: { code: string; meaning: string; recovery?: string }[];
+  };
+};
+
+/** "Agent-first planning board: ..." → the banner half, said in lower case. */
+const TAGLINE = (() => {
+  const head = CONTRACT.meta.purpose.split(":")[0]!;
+  return head.charAt(0).toLowerCase() + head.slice(1);
+})();
+
+/** Hard newlines and leading indentation in authored prose are kept: a guidance
+ * block's example lines are indented on purpose. */
+function wrap(text: string, indent: number, width = WIDTH): string {
+  const lines: string[] = [];
+  for (const paragraph of text.split("\n")) {
+    const pad = " ".repeat(indent) + (paragraph.match(/^ */)?.[0] ?? "");
+    let line = "";
+    for (const word of paragraph.split(" ").filter((w) => w.length > 0)) {
+      if (line.length === 0) line = word;
+      else if (pad.length + line.length + 1 + word.length <= width) line += ` ${word}`;
+      else {
+        lines.push(pad + line);
+        line = word;
+      }
+    }
+    lines.push(pad + line);
+  }
+  return lines.join("\n").replace(/[ \t]+$/gm, "");
+}
+
+function placeholder(argument: ContractArgument): string {
+  if (argument.type === "boolean") return "";
+  if (argument.choices !== undefined) return argument.choices.join("|");
+  if (argument.format === "path") return "<path>";
+  if (argument.format === "ref") return "<ref>";
+  if (argument.format === "url") return "<url>";
+  if (argument.type === "integer" || argument.type === "number") return "<n>";
+  return `<${argument.name.replace(/^--/, "")}>`;
+}
+
+function flagToken(argument: ContractArgument): string {
+  const value = placeholder(argument);
+  return value === "" ? argument.name : `${argument.name} ${value}`;
+}
+
+/**
+ * `agentboard link <ref> (--wiki <wiki> | --url <url> | --artifact <artifact>)`
+ * — a required one_of is a choice in the usage line, not three optionals.
+ */
+function usage(path: string[], command: ContractCommand): string {
+  const args = command.arguments ?? [];
+  const grouped = new Set<string>();
+  const groups: string[] = [];
+  for (const constraint of command.constraints ?? []) {
+    if (constraint.kind !== "one_of") continue;
+    const members = args.filter((argument) => constraint.arguments.includes(argument.name));
+    if (members.length < 2) continue;
+    for (const member of members) grouped.add(member.name);
+    const body = members.map(flagToken).join(" | ");
+    groups.push(constraint.required === true ? `(${body})` : `[${body}]`);
+  }
+
+  const positionals = args.filter((argument) => argument.positional === true);
+  const flags = args.filter(
+    (argument) => argument.positional !== true && !grouped.has(argument.name),
+  );
+  const token = (argument: ContractArgument): string =>
+    argument.required === true ? flagToken(argument) : `[${flagToken(argument)}]`;
+
+  const tokens = [
+    "agentboard",
+    ...path,
+    ...positionals.filter((a) => a.required === true).map((a) => `<${a.name}>`),
+    ...flags.filter((a) => a.required === true).map(flagToken),
+    ...groups,
+    ...flags.filter((a) => a.required !== true).map(token),
+    ...positionals.filter((a) => a.required !== true).map((a) => `[<${a.name}>]`),
+  ];
+
+  // One long usage line is unreadable; continuations hang under the command.
+  const lines: string[] = [];
+  let line = "";
+  for (const token of tokens) {
+    const next = line === "" ? token : `${line} ${token}`;
+    if (next.length + 2 <= WIDTH) line = next;
+    else {
+      lines.push(line);
+      line = `    ${token}`;
+    }
+  }
+  lines.push(line);
+  return lines.join("\n  ");
+}
+
+/** A term and its description, in two columns — the description dropping to
+ * its own line whenever the term is too wide to leave a gap. */
+function definition(head: string, detail: string, column: number): string {
+  const body = wrap(detail, column).slice(column);
+  return head.length + 3 <= column
+    ? `  ${head.padEnd(column - 2)}${body}`
+    : `  ${head}\n${" ".repeat(column)}${body}`;
+}
+
+/**
+ * One declared argument, with every fact the contract holds about it. A
+ * positional prints as `<name>`, so its `choices` have nowhere to go in the
+ * head the way a flag's do — they are said as a note instead. Anything the
+ * contract can state about an argument is rendered here or in `flagToken`;
+ * dropping one silently is how the render stops being a render.
+ */
+function argumentLine(argument: ContractArgument): string {
+  const spellings =
+    argument.aliases === undefined ? [] : argument.aliases.map((alias) => `, ${alias}`);
+  const head =
+    (argument.positional === true ? `<${argument.name}>` : flagToken(argument)) +
+    spellings.join("");
+  const notes: string[] = [];
+  if (argument.required === true) notes.push("required");
+  // A flag shows its choices in the head; a positional has no room there.
+  if (argument.positional === true && argument.choices !== undefined) {
+    notes.push(`one of: ${argument.choices.join(", ")}`);
+  }
+  if (argument.csv === true) notes.push("comma-joined, one value");
+  if (argument.repeatable === true) notes.push("repeatable");
+  if (argument.minimum !== undefined) notes.push(`at least ${argument.minimum}`);
+  if (argument.maximum !== undefined) notes.push(`at most ${argument.maximum}`);
+  if (argument.default !== undefined) notes.push(`default: ${String(argument.default)}`);
+  return definition(head, [argument.description, ...notes.map((n) => `(${n})`)].join(" "), 26);
+}
+
+function commandHelp(path: string[], command: ContractCommand): string {
+  const headline = command.summary.charAt(0).toLowerCase() + command.summary.slice(1);
+  const lines = [`agentboard ${path.join(" ")} — ${headline}`, "", "Usage:"];
+  if (command.subcommands === undefined) {
+    lines.push(`  ${usage(path, command)}`);
+  } else {
+    for (const sub of command.subcommands) lines.push(`  ${usage([...path, sub.name], sub)}`);
+  }
+
+  // MCP tool descriptions lead with this; a person reading --help needs it just
+  // as much, since the command will not return on its own.
+  if (command.blocking === true) {
+    lines.push("", wrap("Blocks: this waits on something outside the CLI and may not return.", 0));
+  }
+
+  const bodies = command.subcommands ?? [command];
+  for (const body of bodies) {
+    const args = body.arguments ?? [];
+    const heading = command.subcommands === undefined ? "Arguments:" : `Arguments (${body.name}):`;
+    if (args.length > 0) {
+      lines.push("", heading, ...args.map(argumentLine));
+    }
+    // A relation between arguments is stated once, in `constraints`; the usage
+    // line can only show a required one_of, so the rest are said here.
+    const constraints = body.constraints ?? [];
+    if (constraints.length > 0) {
+      lines.push("", ...constraints.map((c) => wrap(constraintSentence(c), 0)));
+    }
+    if (body.guidance !== undefined) lines.push("", wrap(body.guidance, 0));
+  }
+  if (command.guidance !== undefined && command.subcommands !== undefined) {
+    lines.push("", wrap(command.guidance, 0));
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+export const HELP: Record<string, string> = Object.fromEntries(
+  COMMANDS.map((command) => [command.name, commandHelp([command.name], command)]),
+);
+
+function commandLines(indent: string, commands: ContractCommand[], marks: boolean): string[] {
+  const lines: string[] = [];
+  for (const command of commands) {
+    const mark = marks && command.audience !== "agent" ? `  [${command.audience}]` : "";
+    lines.push(`${indent}${command.name.padEnd(10)} ${command.summary}${mark}`);
+    if (command.subcommands !== undefined) {
+      lines.push(...commandLines(`${indent}  `, command.subcommands, marks));
+    }
+  }
+  return lines;
+}
+
+const GLOBAL_LINES = [
+  ...GLOBAL_ARGUMENTS.map((argument) => ({
+    flag:
+      argument.aliases === undefined
+        ? flagToken(argument)
+        : `${flagToken(argument)}, ${argument.aliases.join(", ")}`,
+    meaning: argument.description,
+  })),
+  ...ENTRYPOINT_FLAGS,
+].map((entry) => definition(entry.flag, entry.meaning, 20));
+
+export const TOP_HELP = `agentboard — ${TAGLINE}
 
 Usage:
   agentboard [global options] <command> [options]
 
-Global options may go before or after the command name.
+Global options may go before or after the command name; the last three are
+recognized only before it.
 
 Global options:
-  --db <path>      Board database (default: ~/.local/share/agentboard/board.sqlite3;
-                   env: AGENTBOARD_DB)
-  --json           Emit the stable {schema_version, ok, error, data} envelope
-  --jsonl          Emit one record per line where a command streams (list, search,
-                   ready, export, graph)
-  --help, -h       Show this help, or a command's help after the command name
-  --version, -V    Show the version
-  --agent-help     Show the agent runbook
-  --agent-teaser   Show a one-line capability summary
+${GLOBAL_LINES.join("\n")}
 
 Commands:
-${COMMAND_LINES}
+${commandLines("  ", COMMANDS, false).join("\n")}
 
-Every <ref> may be an id, a label, a rough restatement of one, or any unambiguous
-phrase from a label — ids are opaque and never need to be spoken.
+${wrap(CONTRACT.concepts.ref_resolution.accepts, 0)}
 
 Run agentboard --agent-help for the agent runbook.
 `;
 
-export const AGENT_TEASER =
-  "Capture, order, claim, and complete work at any granularity: computed ready-work over a dependency graph, atomic claims, spoken briefs, and atomic grooming drafts.";
+export const AGENT_TEASER = CONTRACT.meta.purpose;
 
-export const AGENT_HELP = `agentboard — agent-first planning board (agent runbook)
+const ERROR_LINES = CONTRACT.concepts.error_codes.map((entry) =>
+  definition(
+    entry.code,
+    entry.recovery === undefined ? entry.meaning : `${entry.meaning} → ${entry.recovery}`,
+    28,
+  ),
+);
 
-One item type at every granularity. Relations, not a second type, are what make
-one item a program and another a one-liner. Ids are opaque: pass a label or any
-unambiguous phrase wherever a command takes <ref>.
+const EXIT_LINES = Object.entries(CONTRACT.concepts.output_contract.exit_codes).map(
+  ([code, meaning]) => `  exit ${code}  ${meaning}`,
+);
 
-Reading (safe anytime)
-  agentboard ready --json                 Open items with no unfinished blockers,
-                                          in board order. Start here.
-  agentboard brief --json                 Grouped summary: underway, ready,
-                                          blocked, waiting, paused.
-  agentboard brief --spoken               The same board as speakable prose —
-                                          labels only, never ids or paths.
-  agentboard state                        The bearings dump: counts plus what
-                                          fits a token budget; silent when clear.
-  agentboard list --state open --json     Filter by state; --tag filters by tag.
-  agentboard get "the auth cleanup" --json  One item with relations, refs, and
-                                          the blockers keeping it out of ready.
-  agentboard search "auth" --json         Match label, title, summary, and tags.
-  agentboard resolve "auth" --json        Ranked candidates when a phrase is
-                                          ambiguous; use before guessing.
-  agentboard events <ref> --json          The item's append-only history.
-  agentboard tree --json                  Containment forest. graph --json is the
-                                          full node/edge export.
+/** The envelope's fields, as `concepts.output_contract.envelope` declares them.
+ * It used to be retyped here as one literal line, which is a second authorship
+ * of the one shape every command's output has. */
+const ENVELOPE_LINES = Object.entries(CONTRACT.concepts.output_contract.envelope).map(
+  ([field, meaning]) => `    ${field}: ${meaning}`,
+);
 
-Taking work
-  agentboard claim <ref> --agent codex --json     Atomic; a second claim is
-                                          refused with already_claimed rather
-                                          than queued. Re-claiming as the same
-                                          agent is idempotent.
-  agentboard release <ref>                Give it back; the item returns to open.
-  agentboard done <ref> --note "..."      Terminal states are frozen: nothing
-  agentboard cancel <ref> --reason "..."  transitions out of done, cancelled, or
-  agentboard supersede <ref> --by <ref>   superseded. Capture follow-ups instead.
+export const AGENT_HELP = `agentboard — ${TAGLINE} (agent runbook)
 
-Capturing and shaping
-  agentboard add the auth cleanup --summary "..." --tag auth,security --json
-    Refused with existing_topic when an open item already covers that topic —
-    that is the point. Pass --new only when a second item is genuinely wanted.
-  agentboard edit <ref> --label "..."      Reword one item: --label, --title, or
-                                          --summary, at least one. A rename
-                                          recomputes the topic key and is refused
-                                          if it collides with another open item.
-                                          Single items only — several at once is
-                                          a grooming draft.
-  agentboard relate <a> depends-on <b>    contains | depends-on | conflicts-with |
-                                          supersedes | related-to. Acyclic kinds
-                                          are validated on write.
-  agentboard link <ref> --wiki some-slug --rel spec
-  agentboard order --id "a,b,c" --to next  Dictated sequence is preserved exactly;
-                                          one "then this, then this" is one call.
-                                          "next" queues behind every claimed
-                                          item, so it never displaces an agent's
-                                          work in progress.
-  agentboard wait <ref> --reason "..."    "Blocked" is never a stored state — it
-                                          is computed from depends-on edges.
-  agentboard rm <ref> --reason "..."      A tombstone, not a delete; restore
-                                          returns the item to the rank it held.
+${CONTRACT.guidance}
 
-Bulk reshaping — grooming drafts are the only path
-  agentboard groom export --json          Gives you baseRevision, items, relations.
-  agentboard groom apply draft.json       Five operations: create-item,
-    update-item, close-item, add-relation, remove-relation. tempIds let one draft
-    reference items it creates. Atomic: it lands completely or writes nothing.
-    Replaying the same draftId with identical bytes reports already_applied and
-    changes nothing; different bytes are refused as draft_conflict; a moved board
-    is refused as stale_draft (re-export). Declare scopeItemIds when the draft is
-    scoped, and expansions for anything you touch beyond it.
+Commands
+${commandLines("  ", COMMANDS, true).join("\n")}
 
-Handing it to a human
-  agentboard render --out board.html [--publish]   Static self-contained snapshot;
-    --publish hands it to agentwiki. agentboard never runs a server.
-  agentboard export --jsonl > board.jsonl ; agentboard import board.jsonl
-    Full-fidelity eject and reload. Import only ever writes into an empty board.
+Output contract
+  With --json every outcome is one envelope on stdout:
+${ENVELOPE_LINES.join("\n")}
+${EXIT_LINES.join("\n")}
 
-Output contract: with --json every outcome is one {schema_version, ok, error, data}
-envelope on stdout — exit 0 on success, exit 1 with ok:false and a snake_case
-error.code on a domain failure; a usage fault prints help on stderr and exits 2
-without an envelope.
+Error codes
+${ERROR_LINES.join("\n")}
 
-Deep runbooks: the \`board\` and \`groom\` agent skills, installed globally; this
-text is the in-binary fallback.
-
-Full machine card: agentboard guide --json
+Full contract, as data: agentboard guide --json
 `;
-
-export const HELP: Record<string, string> = {
-  add: `agentboard add — capture an item
-
-Usage:
-  agentboard add <label words...> [--title T] [--summary S] [--tag a,b] [--new]
-                                  [--origin human|agent]
-
-The label is the speakable name and the voice surface; the title defaults to it.
-A label whose topic key matches an item already open on the board is refused with
-existing_topic, naming the match — pass --new to capture a second one anyway.
-
-Examples:
-  agentboard add the auth cleanup --tag auth,security
-  agentboard add fix the flaky login test --summary "fails ~1 in 20 on CI" --json
-`,
-  edit: `agentboard edit — reword one item
-
-Usage:
-  agentboard edit <ref> [--label "..."] [--title "..."] [--summary "..."] [--json]
-
-At least one field is required. Editing the label recomputes the topic key, so a
-rename onto a topic another open item already holds is refused with
-existing_topic — supersede or relate the two instead. Terminal and removed items
-refuse the edit; the change appends to the event log and bumps the revision like
-any other mutation.
-
-This is the single-item path. Reshaping several items at once — creating,
-closing, and rewiring relations together — still goes through a grooming draft,
-which is the only bulk-mutation path.
-
-Examples:
-  agentboard edit "the auth cleanup" --label "the token rotation"
-  agentboard edit it-9f2a41bc --summary "fails ~1 in 20 on CI" --json
-`,
-  get: `agentboard get — one item in full
-
-Usage:
-  agentboard get <ref> [--json]
-
-Shows state, order, claim, tags, summary, every relation, every outward ref, and
-the unfinished blockers keeping the item out of ready.
-`,
-  list: `agentboard list — the board in order
-
-Usage:
-  agentboard list [--state open|active|waiting|paused|done|superseded|cancelled]
-                  [--tag <tag>] [--all] [--json|--jsonl]
-
-Default: live and unfinished, in board order. --state selects one state (including
-terminal ones), --all includes finished items, and --tag filters by tag.
-`,
-  search: `agentboard search — find items
-
-Usage:
-  agentboard search <query> [--json|--jsonl]
-
-Matches label, title, summary, and tags, case-insensitively, over live items.
-`,
-  events: `agentboard events — one item's history
-
-Usage:
-  agentboard events <ref> [--json]
-
-Every mutation appends here and bumps the item's revision; nothing is rewritten.
-`,
-  resolve: `agentboard resolve — what a phrase could name
-
-Usage:
-  agentboard resolve <phrase> [--json]
-
-Ranked candidates with the tier that matched: id, label, topic, or contains.
-`,
-  ready: `agentboard ready — what can be picked up now
-
-Usage:
-  agentboard ready [--json|--jsonl]
-
-Open items whose depends-on targets have all finished, in board order. Ready is
-computed on every call, never stored, so it cannot go stale.
-`,
-  claim: `agentboard claim — take an item
-
-Usage:
-  agentboard claim <ref> --agent <name> [--json]
-
-Atomic: the write transaction takes the lock before reading, so two agents racing
-for the same item cannot both win. A second agent is refused with already_claimed.
-Only open items are claimable; resume a waiting or paused item first.
-`,
-  release: `agentboard release — give an item back
-
-Usage:
-  agentboard release <ref> [--json]
-
-Clears the claim and returns the item to open, wherever it sat.
-`,
-  done: `agentboard done — close an item as finished
-
-Usage:
-  agentboard done <ref> [--note "..."] [--json]
-`,
-  cancel: `agentboard cancel — close an item as cancelled
-
-Usage:
-  agentboard cancel <ref> --reason "..." [--json]
-`,
-  supersede: `agentboard supersede — one item takes over from another
-
-Usage:
-  agentboard supersede <ref> --by <ref> [--note "..."] [--json]
-
-Closes the first item as superseded and records a supersedes edge from the
-successor to it.
-`,
-  wait: `agentboard wait — park an item on something outside the board
-
-Usage:
-  agentboard wait <ref> --reason "..." [--json]
-
-The reason is the whole content of the state, so it is required. A dependency on
-another item is a depends-on relation instead — that is what ready computes from.
-`,
-  pause: `agentboard pause — set an item aside deliberately
-
-Usage:
-  agentboard pause <ref> --reason "..." [--json]
-
-Pausing is about attention, not priority: the item keeps its rank.
-`,
-  resume: `agentboard resume — bring an item back
-
-Usage:
-  agentboard resume <ref> [--json]
-
-Returns a waiting or paused item to active if it is still claimed, else to open.
-`,
-  order: `agentboard order — set priority
-
-Usage:
-  agentboard order --id "<ref>,<ref>,..." --to first|next|last|after <ref> [--json]
-
-The listed items keep the sequence they were named in, so one dictated run of
-work is one call. "next" lands behind *every* item already underway — that is,
-every claimed (active) item, not merely the first — so reprioritizing what comes
-next never displaces work an agent is holding; with nothing underway it is the
-same as "first". "after" names an anchor. Order is priority and nothing else: it never claims
-work, changes a state, or overrides a depends-on edge.
-
-Examples:
-  agentboard order --id "the auth cleanup,the log panel" --to next
-  agentboard order --id it-9f2a41bc --to after "the auth cleanup"
-`,
-  relate: `agentboard relate — add a typed edge
-
-Usage:
-  agentboard relate <ref> <kind> <ref> [--note "..."] [--json]
-
-Kinds: contains, depends-on, conflicts-with, supersedes, related-to.
-conflicts-with and related-to read the same either way and dedupe regardless of
-direction. contains, depends-on, and supersedes are validated acyclic on write.
-`,
-  unrelate: `agentboard unrelate — remove a typed edge
-
-Usage:
-  agentboard unrelate <ref> <kind> <ref> [--json]
-`,
-  link: `agentboard link — reference something outside the board
-
-Usage:
-  agentboard link <ref> (--wiki <slug> | --url <url> | --artifact <name>)
-                        [--rel spec|notes|evidence] [--json]
-
-Refs point outward; relations point at other items. Default rel is notes.
-`,
-  unlink: `agentboard unlink — drop an outward reference
-
-Usage:
-  agentboard unlink <ref> (--wiki <slug> | --url <url> | --artifact <name>) [--json]
-`,
-  tree: `agentboard tree — the containment forest
-
-Usage:
-  agentboard tree [--root <ref>] [--json]
-`,
-  graph: `agentboard graph — every node and edge
-
-Usage:
-  agentboard graph [--json|--jsonl]
-`,
-  brief: `agentboard brief — summarize the board
-
-Usage:
-  agentboard brief [--spoken] [--json]
-
---spoken renders speakable prose: labels only, never ids, hashes, or paths. Every
-live unfinished item produces a line, so silence means the board is truly empty.
-`,
-  state: `agentboard state — the bearings dump
-
-Usage:
-  agentboard state [--budget <tokens>] [--json]
-
-The cross-tool agent* state dump: a counts header that accounts for everything
-open, label-only lines for what fits --budget (approximate tokens, default 400,
-~4 characters each), (+N more) for what does not, and no output at all when the
-board is clear — silence is the all-clear. Distinct from item state: this is
-bearings for a re-orienting agent. Reading the board in full is brief; acting
-on it is ready and claim.
-`,
-  groom: `agentboard groom — the only bulk-mutation path
-
-Usage:
-  agentboard groom export [--json] [--out <path>]
-  agentboard groom apply <file> [--json]
-
-export gives the baseRevision the draft must be built on, plus every live item
-and relation. apply is atomic and idempotent by draftId. See --agent-help for the
-operation set and the refusal codes.
-`,
-  rm: `agentboard rm — tombstone an item
-
-Usage:
-  agentboard rm <ref> --reason "..." [--json]
-
-Nothing is erased: the state, the rank, and the event log are all kept, and the
-item simply stops being visible to every operational reader.
-`,
-  restore: `agentboard restore — bring a removed item back
-
-Usage:
-  agentboard restore <ref> [--reason "..."] [--json]
-
-The item returns with the state and the rank it held.
-`,
-  export: `agentboard export — eject the board
-
-Usage:
-  agentboard export [--jsonl] [--out <path>]
-
-Full fidelity: items including tombstones, events, relations, refs, and the
-grooming audit. The hedge against this schema: everything can leave.
-`,
-  import: `agentboard import — load an ejected board
-
-Usage:
-  agentboard import <file> [--json]
-
-Only ever writes into an empty board, so it can never merge two histories.
-`,
-  render: `agentboard render — a static snapshot for a human
-
-Usage:
-  agentboard render [--out <path>] [--publish] [--json]
-
-Writes one self-contained HTML file: kanban columns by state, plus the
-containment tree. --publish hands it to \`agentwiki publish --json\` when agentwiki
-is on PATH and reports that envelope's data as \`published\`; without --out the
-snapshot goes to a temp file and is removed once the artifact store owns the
-bytes, so nothing is left in the cwd (a failed publish keeps the file the
-recovery command names). agentboard never runs an HTTP server.
-`,
-  guide: `agentboard guide — the machine card
-
-Usage:
-  agentboard guide --json
-`,
-};
