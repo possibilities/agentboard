@@ -16,7 +16,7 @@ import { type FlagSpec, type ParsedFlags, parseFlags } from "./flags.ts";
 import * as format from "./format.ts";
 import { blockersOf, containsForest, readyItems } from "./graph.ts";
 import { applyGroomDraft, buildGroomExport, parseGroomDraft } from "./groom.ts";
-import type { Placement } from "./order.ts";
+import { PLACEMENTS, type Placement } from "./order.ts";
 import type { Environ } from "./paths.ts";
 import { renderBoard } from "./render.ts";
 import { rankCandidates } from "./resolve.ts";
@@ -189,7 +189,10 @@ function listing(items: readonly Item[], empty: string): CommandOutput {
 }
 
 function parsePlacement(ctx: Context): Placement {
-  const to = oneOf(requireValue(ctx.flags, "to"), ["first", "next", "last", "after"], "--to");
+  // PLACEMENTS, never a hand-typed copy of it: the contract publishes this same
+  // list as --to's `choices` and as concepts.order.placements, and a fourth
+  // spelling here is the drift this whole surface exists to delete.
+  const to = oneOf(requireValue(ctx.flags, "to"), PLACEMENTS, "--to");
   if (to !== "after") return { at: to };
   const anchor = ctx.flags.positional.join(" ").trim();
   if (anchor.length === 0) throw new UsageError("--to after needs an item to place against");

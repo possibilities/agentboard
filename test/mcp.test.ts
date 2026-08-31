@@ -59,13 +59,17 @@ describe("which commands become tools", () => {
       path.replace(/ /g, "_"),
     );
     expect(TOOLS.map((tool) => tool.name).sort()).toEqual([...wanted].sort());
-    expect(wanted.length).toBe(30);
+    // 31: every leaf but `export`, `import` (the operator's backup pair) and
+    // `mcp` itself. `render` is here because the contract calls it an agent
+    // verb — the skill teaches it as the handoff — and nothing in this mapping
+    // gets a say in that.
+    expect(wanted.length).toBe(31);
   });
 
   test("no operator or internal leaf is exposed, mcp included", () => {
     const exposed = new Set(TOOLS.map((tool) => tool.name));
     const hidden = LEAVES.filter(({ leaf }) => leaf.audience !== "agent");
-    expect(hidden.map(({ path }) => path).sort()).toEqual(["export", "import", "mcp", "render"]);
+    expect(hidden.map(({ path }) => path).sort()).toEqual(["export", "import", "mcp"]);
     for (const { path } of hidden) expect(exposed.has(path.replace(/ /g, "_"))).toBe(false);
   });
 
@@ -184,6 +188,14 @@ describe("annotations", () => {
     expect(annotationsOf("add")).toMatchObject({ destructiveHint: false, idempotentHint: false });
   });
 
+  test("a command that writes an out path is destructive without a removing verb", () => {
+    expect(annotationsOf("render")).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+    });
+  });
+
   test("nothing here reaches the network", () => {
     for (const tool of TOOLS) expect(tool.annotations.openWorldHint).toBe(false);
   });
@@ -245,7 +257,11 @@ describe("a live stdio server", () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual(TOOLS.map((tool) => tool.name).sort());
     expect(tools.map((tool) => tool.name)).toContain("groom_export");
     expect(tools.map((tool) => tool.name)).not.toContain("mcp");
-    expect(tools.map((tool) => tool.name)).not.toContain("render");
+    expect(tools.map((tool) => tool.name)).not.toContain("export");
+    expect(tools.map((tool) => tool.name)).not.toContain("import");
+    // The handoff verb the `board` skill teaches, reachable because the
+    // contract says agent — an audience edit alone put it on the wire.
+    expect(tools.map((tool) => tool.name)).toContain("render");
   });
 
   test("a read-only tool returns the CLI's own envelope", async () => {

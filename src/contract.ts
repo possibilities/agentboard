@@ -71,6 +71,9 @@ export interface ContractCommand {
   name: string;
   summary: string;
   audience: "agent" | "operator" | "internal";
+  /** Whether the leaf changes THIS CLI's own state. Writing a destination the
+   * caller named is not that; see `concepts.mutation`, which states the rule in
+   * the published document so the next command is not a coin flip. */
   mutates?: boolean;
   guidance?: string;
   arguments?: ContractArgument[];
@@ -677,7 +680,10 @@ default path), which is why --db and --json are not tool arguments.`,
     name: "export",
     summary: "Eject the whole board as JSONL",
     audience: "operator",
-    mutates: true,
+    // Read-only by the rule in `concepts.mutation`: it never touches the board,
+    // and --out is a destination the caller named. `groom export` is the same
+    // shape and declares the same thing.
+    mutates: false,
     arguments: [
       {
         name: "--out",
@@ -688,7 +694,7 @@ default path), which is why --db and --json are not tool arguments.`,
       },
     ],
     guidance:
-      "Full fidelity: items including tombstones, events, relations, refs, and the grooming audit. The hedge against this schema — everything can leave. It writes no board state, but with --out it writes a file, so it is not read-only.",
+      "Full fidelity: items including tombstones, events, relations, refs, and the grooming audit. The hedge against this schema — everything can leave. Operator-audience: this is the backup half of a backup/restore pair a person runs, not a verb an agent reaches for.",
   },
   {
     name: "import",
@@ -707,12 +713,18 @@ default path), which is why --db and --json are not tool arguments.`,
       },
     ],
     guidance:
-      "Only ever writes into an empty board, so it can never merge two histories. An ejected line is hand-editable, so every enum is re-checked on the way in.",
+      "Only ever writes into an empty board, so it can never merge two histories. An ejected line is hand-editable, so every enum is re-checked on the way in. Operator-audience: the restore half of the export/import pair, and meaningless against the board a running agent is already holding.",
   },
   {
     name: "render",
     summary: "Write a self-contained HTML snapshot of the board",
-    audience: "operator",
+    // The handoff verb: an agent renders the board to hand its work to a human,
+    // which is exactly what the `board` skill teaches. Operator would hide it
+    // from every generated call surface.
+    audience: "agent",
+    // Mutating by the rule in `concepts.mutation`: without --out it writes
+    // agentboard.html into a directory nobody named, and --publish writes an
+    // external store.
     mutates: true,
     arguments: [
       {
@@ -795,8 +807,8 @@ Bulk reshaping — grooming drafts are the only path
 Handing it to a human
   agentboard render --out board.html [--publish]   Static self-contained snapshot;
     --publish hands it to agentwiki. agentboard never runs a server.
-  agentboard export --jsonl > board.jsonl ; agentboard import board.jsonl
-    Full-fidelity eject and reload. Import only ever writes into an empty board.
+    export and import are the operator's backup/restore pair, not agent verbs;
+    --help lists them.
 
 Deep runbooks: the \`board\` and \`groom\` agent skills, installed globally; this
 text is the in-binary fallback.`;
@@ -1035,6 +1047,8 @@ export function buildContract(dbPath: string): Record<string, unknown> {
         board_schema_version: BOARD_SCHEMA_VERSION,
         note: "--db outranks AGENTBOARD_DB, which outranks the default path.",
       },
+      mutation:
+        "`mutates` is about THIS CLI's own state — the board, and the store behind it. Writing a destination the caller explicitly named is not mutation of it: `export` and `groom export` both take --out and both declare mutates: false. A command that writes somewhere the caller did not name does mutate: `render` defaults to agentboard.html in a working directory nobody chose, and --publish hands the bytes to an external store. Read-only therefore means safe to call, never that no byte moves.",
       output_contract: {
         envelope: {
           schema_version: "number",

@@ -32,8 +32,24 @@ contract (agentstart's `config/agent-contract/schema.json`), emitted verbatim by
 from it, and `cli.ts` derives every command's flag grammar from it — so a
 command's summary, flags, choices, defaults, and its `mutates` judgment exist in
 exactly one place. Adding a command means adding it to `contract.ts` and to
-`COMMAND_TABLE`; a test pins that the two agree, and another runs agentstart's
-validator over the emitted document.
+`COMMAND_TABLE`.
+
+Two judgments recur, and both are published rather than re-derived. `audience`
+decides what a generated call surface exposes, so it has to match what the
+skills teach: `render` is `agent` because the `board` skill teaches it as the
+handoff, and `export`/`import` are `operator` because they are a person's
+backup and restore pair. `mutates` is about this CLI's own state, never about a
+destination the caller named — `concepts.mutation` in the contract states that
+rule, which is why `export --out` is read-only and `render` is not.
+
+`test/contract.test.ts` pins the direction that can actually break: `cli.ts` is
+read for every flag its handlers name, and each one has to be declared. The
+reverse — a declared flag the parser rejects — is impossible, since `spec()` IS
+`commandFlags()`. That file also runs agentstart's validator over the emitted
+document, resolving it through `AGENTSTART_HOME`, then `~/code/agentstart`,
+then that checkout's worktrees; it skips only when agentstart is not installed
+at all, and fails naming every path it tried when the checkout is there and the
+script is not.
 
 `mcp-tools.ts` is the whole contract → MCP mapping and nothing else: which
 leaves become tools, their names, input schemas, constraint keywords,

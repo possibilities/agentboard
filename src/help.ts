@@ -131,10 +131,25 @@ function definition(head: string, detail: string, column: number): string {
     : `  ${head}\n${" ".repeat(column)}${body}`;
 }
 
+/**
+ * One declared argument, with every fact the contract holds about it. A
+ * positional prints as `<name>`, so its `choices` have nowhere to go in the
+ * head the way a flag's do — they are said as a note instead. Anything the
+ * contract can state about an argument is rendered here or in `flagToken`;
+ * dropping one silently is how the render stops being a render.
+ */
 function argumentLine(argument: ContractArgument): string {
-  const head = argument.positional === true ? `<${argument.name}>` : flagToken(argument);
+  const spellings =
+    argument.aliases === undefined ? [] : argument.aliases.map((alias) => `, ${alias}`);
+  const head =
+    (argument.positional === true ? `<${argument.name}>` : flagToken(argument)) +
+    spellings.join("");
   const notes: string[] = [];
   if (argument.required === true) notes.push("required");
+  // A flag shows its choices in the head; a positional has no room there.
+  if (argument.positional === true && argument.choices !== undefined) {
+    notes.push(`one of: ${argument.choices.join(", ")}`);
+  }
   if (argument.csv === true) notes.push("comma-joined, one value");
   if (argument.repeatable === true) notes.push("repeatable");
   if (argument.minimum !== undefined) notes.push(`at least ${argument.minimum}`);
@@ -150,6 +165,12 @@ function commandHelp(path: string[], command: ContractCommand): string {
     lines.push(`  ${usage(path, command)}`);
   } else {
     for (const sub of command.subcommands) lines.push(`  ${usage([...path, sub.name], sub)}`);
+  }
+
+  // MCP tool descriptions lead with this; a person reading --help needs it just
+  // as much, since the command will not return on its own.
+  if (command.blocking === true) {
+    lines.push("", wrap("Blocks: this waits on something outside the CLI and may not return.", 0));
   }
 
   const bodies = command.subcommands ?? [command];
@@ -233,6 +254,13 @@ const EXIT_LINES = Object.entries(CONTRACT.concepts.output_contract.exit_codes).
   ([code, meaning]) => `  exit ${code}  ${meaning}`,
 );
 
+/** The envelope's fields, as `concepts.output_contract.envelope` declares them.
+ * It used to be retyped here as one literal line, which is a second authorship
+ * of the one shape every command's output has. */
+const ENVELOPE_LINES = Object.entries(CONTRACT.concepts.output_contract.envelope).map(
+  ([field, meaning]) => `    ${field}: ${meaning}`,
+);
+
 export const AGENT_HELP = `agentboard — ${TAGLINE} (agent runbook)
 
 ${CONTRACT.guidance}
@@ -242,7 +270,7 @@ ${commandLines("  ", COMMANDS, true).join("\n")}
 
 Output contract
   With --json every outcome is one envelope on stdout:
-  {schema_version, ok, error: {code,message,recovery?} | null, data}
+${ENVELOPE_LINES.join("\n")}
 ${EXIT_LINES.join("\n")}
 
 Error codes

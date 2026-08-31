@@ -250,8 +250,6 @@ Restore; do not re-add.
 ```bash
 agentboard render --out board.html --json           # one self-contained HTML file
 agentboard render --out board.html --publish --json # hand it to agentwiki
-agentboard export --out board.jsonl                 # full-fidelity eject
-agentboard import board.jsonl --json                # into an empty board only
 ```
 
 agentboard never runs an HTTP server; the human view is a static file, and
@@ -259,8 +257,17 @@ agentboard never runs an HTTP server; the human view is a static file, and
 terminal. `--publish` shells out to `agentwiki publish` and returns that
 envelope's data as `published`. Without agentwiki on PATH it refuses with
 `agentwiki_missing` and the recovery names the exact command to run later — the
-file is already written. `import` refuses a non-empty board with
-`board_not_empty`, so it can never merge two histories.
+file is already written.
+
+Always pass `--out`: with no destination `render` writes `agentboard.html` into
+whatever directory the process happens to be in, which on a tool surface is a
+directory you did not choose.
+
+`export` and `import` are the operator's backup and restore pair — a person's
+commands, listed in `agentboard --help` and marked `[operator]` in
+`--agent-help`. They are not yours: `import` only ever writes into an *empty*
+board, so it cannot touch one anybody is working from. The board's own
+full-fidelity read is `graph --json`, and a grooming base is `groom export`.
 
 ## Output contract
 
@@ -281,8 +288,8 @@ actually ran, and exit 2 means your command line was wrong before the board was
 ever opened. Argument grammar is checked first, so a missing `--reason` or
 `--agent` is exit 2 with help on stderr — not a domain error envelope.
 
-`--jsonl` streams one record per line for `list`, `search`, `ready`, `graph`,
-and `export`.
+`--jsonl` streams one record per line for `list`, `search`, `ready`, `events`,
+`resolve`, and `graph`.
 
 ## Errors, and the move that fixes each
 
@@ -299,7 +306,6 @@ and `export`.
 | `relation_cycle` | The edge closes a loop in one acyclic kind | Relate the other way round, or use `related-to`, which carries no direction |
 | `duplicate_relation` | That edge already exists (symmetric kinds dedupe either way) | Read `get`; nothing to do |
 | `unknown_relation` | No such edge to remove | `get` either item to see the edges it does carry |
-| `board_not_empty` | `import` into a board with content | Point `--db` at a fresh path |
 | `stale_draft` / `draft_conflict` / `groom_refused` | Grooming | See the [`groom` skill](#sibling-skills) |
 
 ## Recipes

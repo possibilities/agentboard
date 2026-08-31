@@ -244,9 +244,10 @@ const REMOVING_VERBS = new Set([
 const APPENDING: ReadonlySet<string> = new Set(["add"]);
 
 /**
- * Full paths that reach the network. Empty for agentboard: `render --publish`
- * hands the file to agentwiki on this machine, and is operator-audience anyway.
- * A sibling that fetches lists those paths here.
+ * Full paths that reach the network. Empty for agentboard: the one command that
+ * leaves the process is `render --publish`, and it hands the file to `agentwiki
+ * publish` on this machine, which owns a local content-addressed store. A
+ * sibling that fetches lists those paths here.
  */
 const NETWORK: ReadonlySet<string> = new Set<string>();
 
