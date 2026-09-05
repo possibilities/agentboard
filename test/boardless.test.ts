@@ -28,8 +28,10 @@ test("guide does not bring a database into existence", () => {
 
     expect(existsSync(db)).toBe(false);
     expect(existsSync(join(directory, "absent"))).toBe(false);
-    // The runtime itself makes ~/Library under a fresh HOME; nothing else may appear.
-    expect(readdirSync(directory).filter((entry) => entry !== "Library")).toEqual([]);
+    // The runtime itself populates a fresh HOME (~/Library on macOS, ~/.bun on
+    // Linux); nothing of agentboard's may appear.
+    const runtimeOwned = new Set(["Library", ".bun", ".cache"]);
+    expect(readdirSync(directory).filter((entry) => !runtimeOwned.has(entry))).toEqual([]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
