@@ -1,6 +1,9 @@
 ---
 name: board
-description: Drive the agentboard planning board with the agentboard CLI — capture, order, claim, and finish work at any granularity. Use whenever something needs to go on the board or the plan ("add this", "track that", "put it on the backlog"); when asked what to work on ("what's next", "what's ready"); before starting a piece of work and when it is finished; when items need relating, sequencing, or parking; and when someone asks what is going on. One item type at every granularity, and ids are opaque — speak labels. Reshaping several items at once is the groom skill.
+description: >-
+  Capture, prioritize, claim, and complete work on the agentboard planning
+  board. Use for work tracking, next-task selection, and status; use groom for
+  bulk restructuring of multiple items.
 ---
 
 # Board — the agentboard planning board
