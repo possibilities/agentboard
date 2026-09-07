@@ -80,7 +80,10 @@ function callTool(
     const { output, close } = runPrepared(invocation, options.env, options.home);
     try {
       const envelope = success(SCHEMA_VERSION, output.data);
-      return { content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
+      return {
+        structuredContent: { ...envelope },
+        content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }],
+      };
     } finally {
       close();
     }
@@ -111,6 +114,13 @@ function toolError(error: unknown): CallToolResult {
       : new CliError("internal_error", error instanceof Error ? error.message : String(error));
   const lines = [`${domain.code}: ${domain.message}`];
   if (domain.recovery !== undefined) lines.push(`recovery: ${domain.recovery}`);
-  lines.push(JSON.stringify(failure(SCHEMA_VERSION, domain), null, 2));
-  return { isError: true, content: [{ type: "text", text: lines.join("\n") }] };
+  const envelope = failure(SCHEMA_VERSION, domain);
+  return {
+    isError: true,
+    structuredContent: { ...envelope },
+    content: [
+      { type: "text", text: lines.join("\n") },
+      { type: "text", text: JSON.stringify(envelope, null, 2) },
+    ],
+  };
 }
