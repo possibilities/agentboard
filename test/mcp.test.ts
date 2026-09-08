@@ -145,20 +145,20 @@ describe("the input schema", () => {
 
 describe("constraints", () => {
   test("a required one_of becomes oneOf, and is said in the description", () => {
-    expect(schemaOf("link")["oneOf"]).toEqual([
-      { required: ["wiki"] },
-      { required: ["url"] },
-      { required: ["artifact"] },
+    expect(schemaOf("link")["oneOf"]).toMatchObject([
+      { required: ["ref", "wiki"] },
+      { required: ["ref", "url"] },
+      { required: ["ref", "artifact"] },
     ]);
     const link = TOOLS.find((tool) => tool.name === "link");
     expect(link?.description).toContain("Give exactly one of wiki, url, artifact.");
   });
 
   test("at_least_one becomes anyOf, and is said in the description", () => {
-    expect(schemaOf("edit")["anyOf"]).toEqual([
-      { required: ["label"] },
-      { required: ["title"] },
-      { required: ["summary"] },
+    expect(schemaOf("edit")["anyOf"]).toMatchObject([
+      { required: ["ref", "label"] },
+      { required: ["ref", "title"] },
+      { required: ["ref", "summary"] },
     ]);
     const edit = TOOLS.find((tool) => tool.name === "edit");
     expect(edit?.description).toContain("Give at least one of label, title, summary.");
@@ -327,4 +327,21 @@ describe("a live stdio server", () => {
     expect(result.isError).toBe(true);
     expect(result.content[0]!.text).toStartWith("invalid call: ");
   });
+});
+
+test("union discovery retains all fields, input defaults, and mandatory arguments", () => {
+  for (const tool of TOOLS) {
+    const schema = schemaOf(tool.name) as {
+      properties: Record<string, unknown>;
+      required?: string[];
+      oneOf?: Array<{ properties: Record<string, unknown>; required: string[] }>;
+      anyOf?: Array<{ properties: Record<string, unknown>; required: string[] }>;
+    };
+    for (const branch of [...(schema.oneOf ?? []), ...(schema.anyOf ?? [])]) {
+      expect(Object.keys(branch.properties)).toEqual(Object.keys(schema.properties));
+      for (const required of schema.required ?? []) expect(branch.required).toContain(required);
+    }
+  }
+  const branches = schemaOf("link")["oneOf"] as Array<{ required: string[] }>;
+  for (const branch of branches) expect(branch.required).not.toContain("rel");
 });
