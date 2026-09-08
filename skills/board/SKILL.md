@@ -8,10 +8,10 @@ description: >-
 
 # Board — shared work with honest ownership
 
-Use AgentBoard's MCP tools through Executor. Discover the `agentboard`
-namespace, describe the selected tool, and use `guide` for the current item
-model, states, argument constraints, and recovery codes. The installed contract
-is authoritative; tool names below are catalog names, not shell commands.
+Use the `agentboard` MCP server directly. Select the tool from the harness's
+catalog or tool search, inspect its input schema, and call it with JSON
+arguments. The host may prefix tool names with the server name. `guide`
+provides the installed command contract and recovery guidance.
 
 The board is shared state. A claim records who is doing the work; a terminal
 state records what actually happened. Keep both accurate.
@@ -72,7 +72,7 @@ lose the atomicity of a draft.
 - `get` explains one item's state and blockers; `events` reads its history.
   `search` includes finished live items, while `list` normally shows unfinished
   work. Operational readers omit tombstones.
-- `contains` makes larger work out of ordinary items. `depends-on` records
+- `contains` makes larger work out of ordinary items. `depends_on` records
   board dependencies; blocked is computed, never a stored state or tag.
   `waiting` describes a blocker outside the board.
 - `order` changes priority without changing state, claims, or dependencies.
@@ -96,11 +96,10 @@ Do not access the live SQLite file to work around a refused tool call.
 
 ## Interpret results
 
-Check Executor's outer `ok`, then the MCP result's structured envelope
-`{schema_version, ok, error, data}`. If the envelope is in a text content block,
-parse that standalone JSON rather than the human explanation. On an Executor
-MCP error it may be preserved under `error.details.content`. Read the inner
-`error.code` and `recovery` before another call.
+Inspect MCP `isError` and AgentBoard's `{schema_version, ok, error, data}`
+envelope in `structuredContent`. If the host returns only content blocks,
+parse the standalone JSON block and keep diagnostic prose separate. Read
+`error.code` and `recovery` before retrying or claiming success.
 
 `already_claimed` means another agent owns the item; select other ready work or
 coordinate with that agent. `ambiguous_ref` needs a more precise reference.

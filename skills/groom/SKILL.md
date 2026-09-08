@@ -8,10 +8,12 @@ description: >-
 
 # Groom — one atomic change to a backlog
 
-Use AgentBoard's `groom_export` and `groom_apply` MCP tools through Executor.
-Discover the `agentboard` namespace and describe the tools before calling them.
-`guide` publishes the current grooming operation set, scope rules, and limits.
-Use the **board** skill for individual items, claims, state changes, and order.
+Use the `agentboard` MCP server directly. Select the tool from the harness's
+catalog or tool search, inspect its input schema, and call it with JSON
+arguments. The host may prefix tool names with the server name. `guide`
+provides the installed command contract and recovery guidance.
+Use `groom_export` and `groom_apply` for a draft. Use the **board** skill for
+individual items, claims, state changes, and order.
 
 A grooming draft captures a coherent restructuring: deduplication, splitting
 work, re-parenting, batch closure, or replanning. It applies atomically against
@@ -54,10 +56,11 @@ first draft or handling a scope refusal.
 
 ## Reconcile before retrying
 
-Check Executor's outer result and the MCP envelope's inner `ok`, `error.code`,
-and `data.outcome`. The envelope is available as structured content or a
-standalone JSON text block; Executor may preserve a refused MCP result under
-`error.details.content`.
+Inspect MCP `isError` and AgentBoard's `{schema_version, ok, error, data}`
+envelope in `structuredContent`. If the host returns only content blocks,
+parse the standalone JSON block and keep diagnostic prose separate. Read
+`error.code` and `recovery` before retrying or claiming success.
+Inspect `data.outcome` to choose the next action.
 
 | Result | Next action |
 | --- | --- |
